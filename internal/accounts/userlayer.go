@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"github.com/uniair/go-ai-team/internal/claudefs"
 	"github.com/uniair/go-ai-team/internal/store"
@@ -213,6 +212,3 @@ func copyFile(from, to string) error {
 	}
 	return out.Sync()
 }
-
-// BackupSuffix timestamps any file we move aside.
-func BackupSuffix() string { return time.Now().Format(".bak-20060102-150405") }

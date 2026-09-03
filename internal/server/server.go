@@ -277,7 +277,7 @@ func statusFor(err error) int {
 // ---------- accounts ----------
 
 func (s *Server) listAccounts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.accs.Statuses())
+	writeJSON(w, http.StatusOK, orEmpty(s.accs.Statuses()))
 }
 
 type createAccountReq struct {
@@ -418,7 +418,7 @@ func (s *Server) loginAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) discoverAccounts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.accs.Discover())
+	writeJSON(w, http.StatusOK, orEmpty(s.accs.Discover()))
 }
 
 func (s *Server) getUserLayer(w http.ResponseWriter, r *http.Request) {
@@ -440,7 +440,7 @@ func (s *Server) syncUserLayer(w http.ResponseWriter, r *http.Request) {
 // ---------- folders ----------
 
 func (s *Server) listFolders(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.Folders())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.Folders()))
 }
 
 func (s *Server) createFolder(w http.ResponseWriter, r *http.Request) {
@@ -502,7 +502,7 @@ func (s *Server) deleteFolder(w http.ResponseWriter, r *http.Request) {
 // ---------- projects ----------
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.Projects())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.Projects()))
 }
 
 func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
@@ -595,7 +595,7 @@ func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
 		out = append(out, rw)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, orEmpty(out))
 }
 
 func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
@@ -746,7 +746,7 @@ func (s *Server) listSessions(w http.ResponseWriter, r *http.Request) {
 		out = append(out, sess.Public())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.Before(out[j].StartedAt) })
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, orEmpty(out))
 }
 
 func (s *Server) stopSession(w http.ResponseWriter, r *http.Request) {

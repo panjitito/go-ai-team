@@ -13,8 +13,7 @@ async function viewBoard(main) {
   const p = projectById(S.selectedProject);
   if (!p) return main.append(el('div', { class: 'empty', text: 'Pick a project first.' }));
 
-  const tasks = await tryApi('/tasks?projectId=' + encodeURIComponent(p.id));
-  S.tasks = tasks || [];
+  S.tasks = (await tryApi('/tasks?projectId=' + encodeURIComponent(p.id))) || [];
 
   main.append(viewHeader(p, 'Board',
     el('button', { class: 'btn sm primary', onclick: () => newTask(p) }, '+ Task'),
@@ -186,7 +185,7 @@ function openTask(t) {
 async function openRadar() {
   const p = projectById(S.selectedProject);
   if (!p) return;
-  const ideas = await tryApi('/ideas?projectId=' + encodeURIComponent(p.id));
+  const ideas = (await tryApi('/ideas?projectId=' + encodeURIComponent(p.id))) || [];
   const body = el('div', { id: 'radarBody' });
 
   const paint = () => {
@@ -269,7 +268,8 @@ async function viewReview(main) {
   const p = projectById(S.selectedProject);
   if (!p) return main.append(el('div', { class: 'empty', text: 'Pick a project first.' }));
 
-  const st = await tryApi('/git/status?projectId=' + encodeURIComponent(p.id));
+  const st = (await tryApi('/git/status?projectId=' + encodeURIComponent(p.id))) || { isRepo: false };
+  st.files = st.files || [];
 
   main.append(viewHeader(p, 'Review',
     st.isRepo ? el('span', { class: 'pill' }, st.branch || 'detached') : null,
@@ -430,7 +430,7 @@ async function viewTerminals(main) {
   const p = projectById(S.selectedProject);
   if (!p) return main.append(el('div', { class: 'empty', text: 'Pick a project first.' }));
 
-  const cmds = await tryApi('/commands?projectId=' + encodeURIComponent(p.id));
+  const cmds = (await tryApi('/commands?projectId=' + encodeURIComponent(p.id))) || [];
 
   main.append(viewHeader(p, 'Terminals',
     el('button', { class: 'btn sm primary', onclick: () => newCommand(p) }, '+ Command'),
@@ -543,7 +543,7 @@ async function viewSplit(main) {
   const p = projectById(S.selectedProject);
   if (!p) return main.append(el('div', { class: 'empty', text: 'Pick a project first.' }));
 
-  const g = await tryApi('/panes?projectId=' + encodeURIComponent(p.id));
+  const g = (await tryApi('/panes?projectId=' + encodeURIComponent(p.id))) || { orientation: 'cols' };
   S.panes = g;
 
   const live = agentsOf(p.id).map(a => ({ a, s: liveSession(a.id) })).filter(x => x.s);
@@ -691,7 +691,7 @@ function choosePanes(p, live, shown, g) {
 async function viewStats(main) {
   const p = projectById(S.selectedProject);
   const q = p ? '?projectId=' + encodeURIComponent(p.id) : '';
-  const d = await tryApi('/stats' + q);
+  const d = (await tryApi('/stats' + q)) || {};
 
   main.append(viewHeader(p, 'Statistics'));
 

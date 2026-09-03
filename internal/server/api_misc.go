@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/catalog"
 	"github.com/uniair/go-ai-team/internal/claudefs"
 	"github.com/uniair/go-ai-team/internal/gitx"
 	"github.com/uniair/go-ai-team/internal/session"
@@ -371,7 +370,7 @@ func (s *Server) gitLog(w http.ResponseWriter, r *http.Request) {
 		// answer and keeps the response type stable.
 		logs = []gitx.Log{}
 	}
-	writeJSON(w, http.StatusOK, logs)
+	writeJSON(w, http.StatusOK, orEmpty(logs))
 }
 
 type gitMessageReq struct {
@@ -459,7 +458,7 @@ func (s *Server) gitBranch(w http.ResponseWriter, r *http.Request) {
 // ---------- roles ----------
 
 func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.cat.All())
+	writeJSON(w, http.StatusOK, orEmpty(s.cat.All()))
 }
 
 func (s *Server) importRole(w http.ResponseWriter, r *http.Request) {
@@ -544,10 +543,10 @@ func (s *Server) putPanes(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 	if aid := r.URL.Query().Get("agentId"); aid != "" {
-		writeJSON(w, http.StatusOK, s.st.Inbox(aid))
+		writeJSON(w, http.StatusOK, orEmpty(s.st.Inbox(aid)))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.st.Messages())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.Messages()))
 }
 
 func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
@@ -764,7 +763,7 @@ func (s *Server) agentFiles(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, touched)
+	writeJSON(w, http.StatusOK, orEmpty(touched))
 }
 
 // ---------- morph and fork ----------
@@ -978,8 +977,3 @@ func (s *Server) SaveRestoreState() {
 	}
 	_ = s.st.SaveRestore(entries)
 }
-
-// catalogRoles is used by the doctor to report how many roles are installed.
-func (s *Server) catalogRoles() int { return len(s.cat.All()) }
-
-var _ = catalog.Builtin

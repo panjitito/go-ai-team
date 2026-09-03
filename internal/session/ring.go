@@ -64,3 +64,11 @@ func (r *ring) Snapshot() []byte {
 	out = append(out, r.buf[:r.pos]...)
 	return out
 }
+
+// Total reports every byte ever written to this ring, including bytes that have
+// since been discarded. Used to tell whether a reader is still making progress.
+func (r *ring) Total() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.total
+}

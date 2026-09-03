@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/uniair/go-ai-team/internal/automation"
-	"github.com/uniair/go-ai-team/internal/dbx"
 	"github.com/uniair/go-ai-team/internal/guard"
 	"github.com/uniair/go-ai-team/internal/secrets"
 	"github.com/uniair/go-ai-team/internal/session"
@@ -69,10 +68,10 @@ func (s *Server) routeEnv(mux *http.ServeMux) {
 func (s *Server) listCommands(w http.ResponseWriter, r *http.Request) {
 	pid := r.URL.Query().Get("projectId")
 	if pid == "" {
-		writeJSON(w, http.StatusOK, s.st.Commands())
+		writeJSON(w, http.StatusOK, orEmpty(s.st.Commands()))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.st.CommandsFor(pid))
+	writeJSON(w, http.StatusOK, orEmpty(s.st.CommandsFor(pid)))
 }
 
 func (s *Server) createCommand(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +292,7 @@ func (s *Server) deleteSecret(w http.ResponseWriter, r *http.Request) {
 // listDBConns returns connections without any credential. SecretRef is a name,
 // never a value.
 func (s *Server) listDBConns(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.DBConns())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.DBConns()))
 }
 
 func (s *Server) createDBConn(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +429,7 @@ func (s *Server) queryDB(w http.ResponseWriter, r *http.Request) {
 // ---------- ssh ----------
 
 func (s *Server) listSSHHosts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.SSHHosts())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.SSHHosts()))
 }
 
 func (s *Server) createSSHHost(w http.ResponseWriter, r *http.Request) {
@@ -570,7 +569,7 @@ func (s *Server) listSchedules(w http.ResponseWriter, r *http.Request) {
 	for _, sc := range scs {
 		out = append(out, row{sc, automation.Describe(sc)})
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, orEmpty(out))
 }
 
 func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
@@ -692,7 +691,7 @@ func (s *Server) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	for _, wh := range whs {
 		out = append(out, row{wh, "/hooks/" + wh.Token})
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, orEmpty(out))
 }
 
 func (s *Server) createWebhook(w http.ResponseWriter, r *http.Request) {
@@ -846,7 +845,9 @@ func (s *Server) processGuard(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	writeJSON(w, http.StatusOK, guard.Sweep(ctx, roots))
+	rep := guard.Sweep(ctx, roots)
+	rep.Procs = orEmpty(rep.Procs)
+	writeJSON(w, http.StatusOK, rep)
 }
 
 // guardRoots is every live agent's process, plus recently exited ones whose
@@ -900,6 +901,3 @@ func (s *Server) guardKill(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ended"})
 }
-
-// dbxRender is referenced by the MCP query bridge.
-var _ = dbx.MaxRows

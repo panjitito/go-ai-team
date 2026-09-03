@@ -101,10 +101,8 @@ func Sweep(ctx context.Context, roots []Root) Report {
 
 	// Index by parent so descendants can be walked without rescanning.
 	children := map[int][]*Proc{}
-	byPID := map[int]*Proc{}
 	for i := range all {
 		p := &all[i]
-		byPID[p.PID] = p
 		children[p.PPID] = append(children[p.PPID], p)
 	}
 

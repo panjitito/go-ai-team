@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------- prompts
 
 async function openPrompts() {
-  const prompts = await tryApi('/prompts');
+  const prompts = (await tryApi('/prompts')) || [];
   const body = el('div', {});
 
   body.append(el('p', { class: 'hint', style: 'margin-top:0' },
@@ -100,7 +100,7 @@ function firstLineOf(s, n) {
 // ---------------------------------------------------------------- skills
 
 async function openSkills() {
-  const skills = await tryApi('/skills');
+  const skills = (await tryApi('/skills')) || [];
   const body = el('div', {});
   body.append(el('p', { class: 'hint', style: 'margin-top:0' },
     'A skill is a procedure in SKILL.md form: how your team does a particular job. ' +
@@ -171,7 +171,7 @@ function editSkill(k) {
 async function openMemory() {
   const p = projectById(S.selectedProject);
   if (!p) return toast('Pick a project first', 'bad');
-  const mems = await tryApi('/memory?projectId=' + encodeURIComponent(p.id));
+  const mems = (await tryApi('/memory?projectId=' + encodeURIComponent(p.id))) || [];
 
   const body = el('div', {});
   body.append(el('p', { class: 'hint', style: 'margin-top:0' },
@@ -238,7 +238,8 @@ function addMemory(p) {
 // ---------------------------------------------------------------- automation
 
 async function openAutomation() {
-  const [scheds, hooks] = await Promise.all([tryApi('/schedules'), tryApi('/webhooks')]);
+  const [scheds, hooks] = (await Promise.all([tryApi('/schedules'), tryApi('/webhooks')]))
+    .map(x => x || []);
   const body = el('div', {});
 
   body.append(el('div', { class: 'tabs' },
@@ -473,9 +474,12 @@ function newWebhook() {
 // ---------------------------------------------------------------- environment
 
 async function openEnvironment() {
-  const [sec, dbs, hosts] = await Promise.all([
+  let [sec, dbs, hosts] = await Promise.all([
     tryApi('/secrets'), tryApi('/dbconns'), tryApi('/sshhosts'),
   ]);
+  sec = sec || { available: false, reason: 'the vault could not be read', secrets: [] };
+  dbs = dbs || [];
+  hosts = hosts || [];
   const body = el('div', {});
   body.append(el('div', { class: 'tabs' },
     el('div', { class: 'tab active', id: 'evS', onclick: () => swapEnv('s') }, 'Secrets'),
@@ -739,7 +743,7 @@ function newSSHHost(sec) {
 // ---------------------------------------------------------------- roles
 
 async function openRoles() {
-  const roles = await tryApi('/roles');
+  const roles = (await tryApi('/roles')) || [];
   S.roles = roles;
   const body = el('div', {});
 
@@ -826,7 +830,7 @@ function importRole() {
 // ---------------------------------------------------------------- process guard
 
 async function openGuard() {
-  const rep = await tryApi('/guard');
+  const rep = (await tryApi('/guard')) || { supported: false, procs: [] };
   const body = el('div', {});
 
   body.append(el('p', { class: 'hint', style: 'margin-top:0' },

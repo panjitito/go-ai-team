@@ -5,3 +5,4 @@
 
 # local state (never commit: it lists account directories)
 /.goaiteam/
+/go-ai-team.exe~

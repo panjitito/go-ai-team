@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/automation"
 	"github.com/uniair/go-ai-team/internal/mcp"
 	"github.com/uniair/go-ai-team/internal/store"
 )
@@ -56,10 +54,10 @@ func (s *Server) routeWork(mux *http.ServeMux) {
 func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
 	pid := r.URL.Query().Get("projectId")
 	if pid == "" {
-		writeJSON(w, http.StatusOK, s.st.Tasks())
+		writeJSON(w, http.StatusOK, orEmpty(s.st.Tasks()))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.st.TasksFor(pid))
+	writeJSON(w, http.StatusOK, orEmpty(s.st.TasksFor(pid)))
 }
 
 func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
@@ -286,10 +284,10 @@ func (s *Server) voteTask(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listIdeas(w http.ResponseWriter, r *http.Request) {
 	pid := r.URL.Query().Get("projectId")
 	if pid == "" {
-		writeJSON(w, http.StatusOK, s.st.Ideas())
+		writeJSON(w, http.StatusOK, orEmpty(s.st.Ideas()))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.st.IdeasFor(pid))
+	writeJSON(w, http.StatusOK, orEmpty(s.st.IdeasFor(pid)))
 }
 
 func (s *Server) createIdea(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +392,7 @@ func firstLine(s string, max int) string {
 // ---------- prompts ----------
 
 func (s *Server) listPrompts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.Prompts())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.Prompts()))
 }
 
 func (s *Server) createPrompt(w http.ResponseWriter, r *http.Request) {
@@ -502,7 +500,7 @@ func (s *Server) sendPrompt(w http.ResponseWriter, r *http.Request) {
 // ---------- skills ----------
 
 func (s *Server) listSkills(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.Skills())
+	writeJSON(w, http.StatusOK, orEmpty(s.st.Skills()))
 }
 
 func (s *Server) createSkill(w http.ResponseWriter, r *http.Request) {
@@ -613,10 +611,10 @@ func safeFilename(s string) string {
 func (s *Server) listMemory(w http.ResponseWriter, r *http.Request) {
 	pid := r.URL.Query().Get("projectId")
 	if pid == "" {
-		writeJSON(w, http.StatusOK, s.st.Memories())
+		writeJSON(w, http.StatusOK, orEmpty(s.st.Memories()))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.st.MemoriesFor(pid))
+	writeJSON(w, http.StatusOK, orEmpty(s.st.MemoriesFor(pid)))
 }
 
 func (s *Server) createMemory(w http.ResponseWriter, r *http.Request) {
@@ -687,16 +685,5 @@ func (s *Server) boardCounts(projectID string) map[string]int {
 	for _, t := range s.st.TasksFor(projectID) {
 		out[string(t.Status)]++
 	}
-	return out
-}
-
-// describeSchedule is exposed to the UI so the cadence wording lives in one
-// place.
-func describeSchedule(sc *store.Schedule) string { return automation.Describe(sc) }
-
-// sortedTasks keeps a board column stable between renders.
-func sortedTasks(in []*store.Task) []*store.Task {
-	out := append([]*store.Task(nil), in...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Order < out[j].Order })
 	return out
 }

@@ -99,43 +99,60 @@ matters.
 
 ## Where Go AI Team stands
 
-**Done, and verified against two real accounts on this machine:** the account
-model, the full cascade, in-app sign-in, attach/discover existing directories,
-live PTY terminals, the token meter, quota detection with auto-switch, the shared
-user layer, honest auth state, doctor, phone access.
+Built and verified: the account model and full cascade, in-app sign-in,
+attach/discover, live PTY terminals, split view, the board with drag-to-start,
+the Idea Radar, ticket scoping, prompt chaining, the skills library, project
+memory, scheduled tasks, webhook triggers with signature verification, the MCP
+bridge (16 tools), per-agent diff attribution, AI commit messages, commit
+context, the token meter, statistics, adaptive model routing, the process guard,
+the secret vault, read-only database access, SSH hosts and tunnels, agent
+morphing and forking, agent messaging, voice dictation and read-aloud, restore
+on launch, doctor, and phone access.
 
-We match their multi-account feature and go past it in four places:
+Not built: cloud agents (needs a cloud provider), the public client portal,
+Figma capture, a remote-fleet relay, and the non-Claude providers — the account
+model is provider-shaped and the environment variables are wired, but only
+Claude is exercised.
 
-1. **One 12 MB binary**, not a ~250 MB Electron app. No `npm install`.
-2. **The browser is the mobile app.** `--host 0.0.0.0` and the same UI works on a
-   phone, gated by a per-run token. They ship and maintain a separate native app.
-3. **The account badge is verified against disk**, not just intended — once
+### Where we go further than they do
+
+1. **One 15 MB binary**, not a ~250 MB Electron app. No `npm install`.
+2. **The browser is the mobile app.** `--host 0.0.0.0` and the same UI works on
+   a phone behind a per-run token. They ship and maintain a separate native app.
+3. **No metered AI.** Their free tier allows 5 commit messages, 3 summaries and
+   100 suggestions a month, then invites you to attach your own OpenAI key. Ours
+   shell out to the CLI you already pay for: unlimited, no key, nothing leaves
+   the machine.
+4. **The account badge is verified against disk**, not merely intended — once
    Claude writes its own session file we show the account it actually used.
-4. **Sign-in state is read, not assumed.** A logged-out `.credentials.json` is a
+5. **Sign-in state is read, not assumed.** A logged-out `.credentials.json` is a
    husk with blank tokens; treating its existence as proof makes the dashboard
-   lie and makes auto-switch hand a live conversation to a dead account. See
-   README.
+   lie and makes auto-switch hand a live conversation to a dead account.
+6. **Voice runs on the browser's own speech API** — free and offline for
+   synthesis, against their metered 2 hours a month.
+7. **Commit context stays in your repository**, redacted, instead of being
+   uploaded to an external gist service.
 
-Two bugs that only real testing could have found, both now fixed and pinned by
-tests: the husk problem above, and inherited `CLAUDE_CODE_CHILD_SESSION` turning
-transcript writing off — which would have left the token meter permanently empty
-whenever the app was launched from inside a Claude session.
+### Bugs only real testing could have found
 
-## Suggested build order from here
+Each of these passed code review and would have shipped:
 
-Cheapest-to-most-valuable, given the account core is done:
+| Bug | Consequence |
+|---|---|
+| Inherited `CLAUDE_CODE_CHILD_SESSION` | Transcript writing off → the token meter permanently empty whenever the app was launched from a Claude session. |
+| `.credentials.json` treated as proof of sign-in | Dashboard reported `2/2 signed in` for two signed-out directories; auto-switch would have failed over to a dead account. |
+| Nil slice encoded as `null` | A project with no saved commands crashed the whole Terminals view. |
+| PTY closed the instant the process exited | A fast command lost its entire output about one run in five — verified, then fixed and pinned at 20/20. |
+| CSS `1fr` grid blowout | Five board columns pushed the topbar off screen. |
+| Unborn HEAD / empty repository | Review showed a blank branch and `git log` returned a 400 on a freshly initialised repo. |
+| `DeleteProject` did not cascade | A deleted project left schedules behind that kept firing agents at a directory no longer listed anywhere. |
 
-1. **Split view** — pure UI over the session manager we already have; their most
-   distinctive fleet feature.
-2. **Restore session** — we already persist everything needed; one checkbox.
-3. **Multi-provider** — the store is already provider-shaped (`EnvVar()`,
-   `Bin()`); this is wiring plus a model picker, not a redesign.
-4. **Backlog kanban + MCP server** — the piece that makes agents drive the app
-   instead of only being driven by it. Their real moat.
-5. **Scheduled tasks / webhook triggers** — high value with auto-switch already
-   in place, because an unattended 2am run no longer dies at a quota wall.
-6. **Process Guard** — cheap to build, and the measured win they quote (15.5 GB
-   returned on a 16 GB laptop) is real.
+## Verification
 
-Deliberately last: voice, the 273-agent catalogue (it is MIT, so it is an import
-not a build), cloud agents, and the client portal.
+- 54 Go tests across 9 packages; `gofmt`, `go vet` clean.
+- A scripted check loop hitting 102 endpoint cases, including the failure paths.
+- An automation loop that fires a real HMAC-signed webhook and asserts the
+  interpolated prompt reached the agent's terminal.
+- The multi-account core proved on disk against two real signed-in accounts:
+  two agents, one project, two different `CLAUDE_CONFIG_DIR` values, confirmed
+  by which directory each PID wrote its session file into.

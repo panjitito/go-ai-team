@@ -1,95 +1,111 @@
 # Go AI Team
 
-Run every Claude Code account you own side by side, in one window, on one
-machine — with a per-project and per-agent binding, a live token meter, and an
-automatic hand-off when one account hits its usage limit.
+An open cockpit for Claude Code and friends: run every account you own side by
+side, drive a board, schedule and trigger agents, review what they wrote, and
+let them drive the app back through MCP.
 
 One binary. No Electron, no `npm install`, no subscription.
 
 ```
 go-ai-team.exe
-  ├─ HTTP server  :7777      → web UI (xterm.js), same UI on desktop and phone
+  ├─ HTTP server  :7777      → web UI, same on desktop and phone
   ├─ WebSocket    /ws/pty    → live terminals
-  ├─ WebSocket    /ws/events → status, token and account events
-  ├─ PTY manager             → spawns `claude` with CLAUDE_CONFIG_DIR bound
-  └─ ~/.goaiteam/            → accounts, projects, agents, settings
+  ├─ WebSocket    /ws/events → status, tokens, accounts, automation
+  ├─ POST         /hooks/:t  → signed webhook deliveries
+  ├─ PTY manager             → agents, dev commands, SSH shells
+  ├─ scheduler + hooks       → unattended runs
+  └─ ~/.goaiteam/            → state, profiles, encrypted vault
+
+go-ai-team.exe mcp --project <id>
+  └─ JSON-RPC on stdio       → 16 tools an agent can call back into
 ```
 
 ## Why this exists
 
 Claude Code supports multiple accounts through one documented mechanism: the
 `CLAUDE_CONFIG_DIR` environment variable. Point it at a different directory and
-you get a different account — its own credentials, its own sessions, its own
-transcripts, its own quota.
+you get a different account — its own credentials, sessions, transcripts and
+quota.
 
-Doing that by hand is miserable. You export a variable, forget which shell has
-which account, and the moment you open a second tab you are guessing. Go AI Team
-makes the binding declarative instead: pin an account to a project, override it
-on a single agent, and every terminal it launches is bound correctly without you
-thinking about it.
+Doing that by hand is miserable, and the tool that does it for you charges
+€7.99/month for the privilege. So this does it declaratively instead: pin an
+account to a project, override it on a single agent, and every terminal is bound
+correctly without you thinking about it.
 
 **Nothing here proxies the Anthropic API and no credential passes through this
 program.** It decides which directory a process starts in, and reads the files
 the CLI already wrote to your disk.
 
-## What works today
+**Every "AI feature" runs on the subscription you already pay for.** Commit
+messages, agent suggestions, feedback clustering, ticket scoping, model routing
+and read-aloud summaries all shell out to your own signed-in CLI in headless
+mode. There is no metered allowance and no API key to add — which is the whole
+point, since the alternative charges per month for a few hundred of them.
 
+## What it does
+
+### Accounts
 | | |
 |---|---|
 | **Unlimited accounts** | An account is a config directory. Add as many as you like. |
-| **In-app sign-in** | Opens a real terminal bound to the new profile; you type `/login`, OAuth happens in your browser as usual, and the badge flips the instant `.credentials.json` lands on disk. |
-| **Attach what you already have** | Point an account at `~/.claude`, at a CCS profile (`~/.ccs/instances/work`), or at any directory with credentials — reused as-is, no re-login. |
-| **Find existing accounts** | Scans for provider defaults, CCS instances and `~/.claude-*` siblings, and offers to attach them. |
-| **The cascade** | `agent override → project pin → nearest folder that pins one → global default → ~/.claude`. Fully unit-tested, including folder cycles and dangling references. |
-| **Two accounts, one project, at once** | Two agents in the same project can run on two different accounts simultaneously. Verified against real signed-in accounts on disk. |
-| **Account colours** | A dot on the agent avatar, the terminal header and the project tile, so what is being billed to whom is never a guess. |
-| **Verified binding** | The badge is confirmed against disk: once Claude writes its own session file, the UI shows the account it *actually* used, not the one we intended. |
-| **Live terminals** | Real PTYs over a websocket into xterm.js, with 256KB of scrollback replayed on attach so reconnecting mid-run is never a blank screen. |
-| **Token meter** | Input, output, cache writes, cache reads, cache hit rate, tool uses, models routed, duration — read straight from Claude's own JSONL transcripts. No proxy, no estimation, no network call. |
-| **Contextual tips** | Suggestions chosen *from your live numbers* (low cache hit rate, lopsided turn ratio, heavy reads), each with a ready-to-send prompt. |
-| **Auto-switch at a usage limit** | Benches the exhausted account, copies the transcript into another signed-in account's tree, resumes the same session there, and tells the agent to continue rather than restart. |
-| **Shared user layer** | Links your own slash commands, skills, subagents, `CLAUDE.md`, hooks and plugins into every account, so a fresh account is not empty. Credentials and history stay isolated. |
-| **Phone access** | `--host 0.0.0.0` and the same UI works from your phone's browser. No second app. |
-| **Doctor** | Answers "why would an agent not start" before you have to guess. |
-| **Honest sign-in state** | Distinguishes *signed in* from *signed out* from *never signed in* — see below, because the obvious check is wrong. |
+| **In-app sign-in** | Opens a real terminal bound to the new profile; you type `/login`, OAuth happens in your browser, and the badge flips the instant credentials land on disk. |
+| **Attach what you have** | Point at `~/.claude`, a CCS profile, or any directory with credentials — reused as-is, no re-login. |
+| **Discovery** | Scans for provider defaults, CCS instances and `~/.claude-*` siblings. |
+| **The cascade** | `agent override → project pin → nearest folder that pins one → global default → ~/.claude`. Unit-tested in every direction, including folder cycles and dangling references. |
+| **Verified binding** | Once the CLI writes its own session file, the badge shows the account it *actually* used, not the one we intended. |
+| **Honest sign-in state** | Distinguishes signed in from signed out from never signed in — see below, because the obvious check is wrong. |
+| **Auto-switch** | At a usage limit: bench the account, copy the transcript into another one, resume the same session there, tell the agent to continue. |
+| **Shared user layer** | Links your own commands, skills, subagents, `CLAUDE.md`, hooks and plugins into every account. Credentials stay isolated. |
 
-## The sign-in check, and why the obvious one is wrong
-
-Logging out of Claude Code does **not** delete `.credentials.json`. It leaves the
-file in place, with its metadata intact — subscription type, organisation id,
-token expiry — and the token strings blanked:
-
-```json
-{"claudeAiOauth":{
-  "accessToken": "",            ← blank
-  "refreshToken": "",           ← blank
-  "subscriptionType": "max",    ← still there
-  "refreshTokenExpiresAt": 1789980000000
-}}
-```
-
-So "the credentials file exists" proves nothing. Go AI Team's first version made
-exactly that mistake and cheerfully reported two signed-out directories as
-`2/2 signed in`; the failure only showed up as a red *Not logged in* line inside
-the agent's terminal.
-
-That is worse than a cosmetic bug, because the auto-switch fallback picker uses
-the same signal. It would have handed a live conversation to a dead account at
-precisely the moment the feature exists to rescue it.
-
-The check now reads the file and reports one of:
-
-| State | Meaning |
+### Running agents
+| | |
 |---|---|
-| `active` | An access token is present. Usable. |
-| `refreshable` | Only a refresh token, but still in date — the CLI will mint a new one. Usable. |
-| `loggedOut` | File present, tokens blank. **Not** usable; needs a fresh `/login`. |
-| `missing` | No credentials file yet. |
-| `unreadable` | File could not be parsed. |
+| **Agent grid** | Role colours, live status dots, account dot on every avatar. |
+| **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
+| **Live terminals** | Real PTYs over websocket into xterm.js, 256KB scrollback replayed on attach. |
+| **Morph** | Change a running agent's role in place, keeping its conversation. Optional "fresh eyes". |
+| **Fork** | A twin that resumes the parent's actual session, not a summary of it. |
+| **Agent messaging** | Saved agents have an inbox. Messages persist to disk before delivery is attempted. |
+| **Dev terminals** | Saved per-project commands with live output, reachable from your phone. |
+| **SSH** | Saved hosts, one-click shell using your own ssh client, tunnels for private databases. |
+| **Restore on launch** | Reopens the agents and commands that were running when you quit. |
 
-`expiresAt` is frequently `0` on a perfectly working account, so a zero is read
-as "not stated" rather than as "expired in 1970". Only the two usable states
-count towards the account badge and the fallback pool.
+### Work intake
+| | |
+|---|---|
+| **Board** | Kanban with drag-and-drop. Dropping a task in *In progress* starts an agent on it. |
+| **Idea Radar** | Raw feedback in; themes out, deduplicated, rated on impact and effort, promotable to a ticket. |
+| **Ticket scoping** | A PM pass reads the real codebase and writes a brief onto the ticket before any code is written. |
+| **Prompt library** | Folders, personal flag, and `{{prompt:name}}` chaining so shared rules live in one place. |
+| **Skills library** | `SKILL.md` with triggers, exportable to any runtime that reads the format. |
+| **Project memory** | What agents learned — decisions, pitfalls, conventions — surviving the session, read by every agent. |
+
+### Automation
+| | |
+|---|---|
+| **Scheduled tasks** | Every N minutes, hourly, daily, weekly, monthly. No cron expression. A window missed while the app was closed is caught up, not skipped. |
+| **Webhook triggers** | A URL and a signing secret per trigger. Signature verified, filter evaluated, burst limit enforced, payload flattened into prompt variables. A delivery that cannot run is queued and replayed. |
+| **MCP bridge** | 16 tools exposing the app to the agents inside it: backlog, memory, prompts, commands, messaging, secrets, databases. |
+
+### Review and cost
+| | |
+|---|---|
+| **Per-agent diff** | Filter the working tree by which agent touched which file, read back from each agent's own transcript. |
+| **Commit messages** | Written from the real staged diff, in your house style. |
+| **Commit context** | Attaches the agent conversation behind a commit as a file in the repo, credentials stripped. Nothing is uploaded. |
+| **Token meter** | Input, output, cache writes and reads, cache hit rate, tool uses, models routed — straight from Claude's own JSONL. |
+| **Contextual tips** | Chosen from your live numbers, each with a ready-to-send prompt. |
+| **Statistics** | Tokens per agent and per account, cache rates, minutes, switches. |
+| **Adaptive model** | Reads the prompt before you send it and suggests the cheapest model that will do the job. |
+| **Process guard** | Finds child processes that are large, old AND idle at once. Nothing is ended unless you ask. |
+
+### Environment
+| | |
+|---|---|
+| **Secret vault** | DPAPI on Windows, AES-GCM under an owner-only key elsewhere. Referenced as `{{secret:NAME}}` and resolved at launch. There is no code path that returns a value — not to the UI, not to the API, not to an agent. |
+| **Databases** | MySQL and PostgreSQL, read-only by default, one statement per call, stacked statements refused, results capped, optional SSH tunnel. Agents query by naming a connection. |
+| **Voice** | Dictation and read-aloud on the browser's own Web Speech API — free, no backend, no metered hours. |
+| **Doctor** | Answers "why would an agent not start" before you have to guess. |
 
 ## Install
 
@@ -110,32 +126,66 @@ The UI opens at <http://localhost:7777>.
 ```
 
 The banner prints a `http://<your-ip>:7777/?token=…` link. Binding beyond
-loopback generates a fresh access token on every start, because a terminal
-reachable on your network without one would be an open shell.
+loopback generates a fresh token on every start, because a terminal reachable on
+your network without one would be an open shell. Link-local addresses are
+filtered out, so the first line is the one worth trying.
 
-### Flags
+### Wiring the MCP bridge into a project
 
-| Flag | Default | |
-|---|---|---|
-| `--port` | `7777` | Port to listen on. |
-| `--host` | `127.0.0.1` | Bind address. `0.0.0.0` for phone access. |
-| `--open` | `true` | Open a browser on start. |
-| `--version` | | Print version and exit. |
+Add this to the project's `.mcp.json`, and its agents gain the 16 tools:
+
+```json
+{
+  "mcpServers": {
+    "go-ai-team": {
+      "command": "go-ai-team",
+      "args": ["mcp", "--project", "prj_xxxxxxxx", "--agent-name", "Backend Dev"]
+    }
+  }
+}
+```
+
+The `--project` scope is the trust boundary: an agent can only reach that
+project's backlog, memory and connections.
 
 ## First run
 
 1. **Accounts → Find existing accounts.** If you already use Claude Code, your
-   `~/.claude` shows up as signed in. Attach it.
-2. **Add a second account.** Either attach another directory you already have,
-   or add a fresh one and sign in from the app.
-3. **+ Project** → pick a folder.
-4. **+ Agent** → name it, optionally set an account override.
-5. Click the card to start it. The dot on its avatar is the account it is
-   spending.
+   `~/.claude` shows up. Attach it.
+2. **Add a second account** and sign in, so auto-switch has somewhere to go.
+3. **+ Project** → pick a folder. **+ Agent** → name it.
+4. Click the card to start it.
 
-To separate work from personal: make a folder, pin the work account to it, and
-file your work repositories under it. Every project inside starts on that
-account — including ones you add later.
+To separate work from personal: make a folder, pin the work account to it, file
+your work repositories under it. Every project inside starts on that account,
+including ones you add later.
+
+## The sign-in check, and why the obvious one is wrong
+
+Logging out of Claude Code does **not** delete `.credentials.json`. It leaves the
+file in place, metadata intact, with the token strings blanked:
+
+```json
+{"claudeAiOauth":{
+  "accessToken": "",            ← blank
+  "refreshToken": "",           ← blank
+  "subscriptionType": "max",    ← still there
+  "refreshTokenExpiresAt": 1789980000000
+}}
+```
+
+So "the file exists" proves nothing. The first version of this made exactly that
+mistake and cheerfully reported two signed-out directories as `2/2 signed in`;
+the failure only showed up as a red *Not logged in* line inside the terminal.
+
+That is worse than cosmetic, because the auto-switch fallback picker uses the
+same signal — it would have handed a live conversation to a dead account at
+precisely the moment the feature exists to rescue it.
+
+The check now reads the file and reports `active`, `refreshable`, `loggedOut`,
+`missing` or `unreadable`. Only the first two count as usable. `expiresAt` is
+frequently `0` on a working account, so a zero means "not stated" rather than
+"expired in 1970".
 
 ## How the account binding works
 
@@ -154,11 +204,19 @@ Then, from disk
   └─ projects/<encoded-cwd>/<sessionId>.jsonl        → the token meter
 ```
 
+The account is resolved **once**, at spawn, and every later display reads that
+frozen answer — so the badge on screen can never disagree with the process.
+
+Transcript lookup tries the encoded-cwd path first, then falls back to globbing
+`projects/*/<sessionId>.jsonl`. The session id is authoritative, so if Claude
+ever changes its folder-naming rule this degrades to a slower lookup instead of
+a wrong answer.
+
 ### Environment hygiene
 
 Go AI Team is usually launched from a terminal, and that terminal is sometimes
-*itself* a Claude Code session. Such a session exports about ten variables
-describing itself, and inheriting them is never right:
+*itself* a Claude Code session, which exports about ten variables describing
+itself:
 
 ```
 CLAUDECODE                     CLAUDE_CODE_MESSAGING_SOCKET
@@ -168,63 +226,80 @@ CLAUDE_CODE_BRIDGE_SESSION_ID  CLAUDE_CODE_EXECPATH
 CLAUDE_PID                     CLAUDE_EFFORT
 ```
 
-Two of them matter a lot. `CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN` point at the
-*parent* session's IPC channel. And `CLAUDE_CODE_CHILD_SESSION` makes the CLI
-skip writing a transcript — which silently kills the token meter, since there is
-then no JSONL file to read. This was observed in a real run: the agent booted
-with `⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`.
+Two matter a lot. `CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN` point at the *parent*
+session's IPC channel. And `CLAUDE_CODE_CHILD_SESSION` makes the CLI skip
+writing a transcript — which silently kills the token meter, since there is then
+no JSONL to read. This was observed in a real run: the agent booted with
+`⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`.
 
 So every spawn starts from a filtered environment. The filter is a precise
 deny-list plus two narrow patterns (`*_SESSION_ID`, `*_MESSAGING_*`) rather than
-the whole `CLAUDE_CODE_` prefix, because legitimate user settings such as
-`CLAUDE_CODE_MAX_OUTPUT_TOKENS` live under that prefix too and must survive.
-`internal/session/env_test.go` pins both halves of that behaviour.
-
-The account is resolved **once**, at spawn, and every later display reads that
-frozen answer — so the badge on screen can never disagree with the process.
-
-Transcript lookup tries the encoded-cwd path first, then falls back to globbing
-`projects/*/<sessionId>.jsonl`. The session id is authoritative, so if Claude
-ever changes its folder-naming rule this degrades to a slower lookup instead of
-a wrong answer.
+the whole `CLAUDE_CODE_` prefix, because legitimate settings like
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` live under that prefix too.
 
 ## Auto-switch
 
 When the CLI says it is out of quota:
 
-1. The exhausted account is **benched** — using the provider's own reset time
-   when it publishes one — even if there is nowhere to switch to, so the next
-   agent you launch does not walk into the same wall.
-2. A replacement is chosen among your other accounts of that provider: signed
-   in on disk, not benched, not opted out, least recently used.
+1. The account is **benched** — using the provider's own reset time when it
+   publishes one — even if there is nowhere to switch to, so the next agent does
+   not walk into the same wall.
+2. A replacement is chosen: signed in on disk, not benched, not opted out, least
+   recently used.
 3. The transcript is **copied into the incoming account's tree**. A Claude
    session physically lives inside the account that created it, so without this
-   step `--resume` would open an empty conversation — exactly the loss the
-   feature exists to prevent. The original account keeps its copy untouched.
-4. The CLI is relaunched with `--resume <sessionId>` on the new account and
-   nudged to *continue*, not restart.
+   `--resume` would open an empty conversation — exactly the loss the feature
+   exists to prevent.
+4. The CLI is relaunched with `--resume` and nudged to *continue*, not restart.
 5. The bench lifts by itself when the window reopens.
 
 **The detector only fires on a real limit message.** Warnings, percentages and
 quota panels are ignored by construction, there is a 90-second cooldown so a
 resumed conversation cannot re-trigger on its own replayed history, and the
 app's own announcement is excluded from matching. A false positive would spend a
-subscription you did not intend to spend, so `internal/session/quota_test.go`
-asserts the expensive mistakes stay non-matches.
+subscription you did not intend to spend, so the test suite asserts the
+expensive mistakes stay non-matches.
 
 Any account can be marked **never a backup** — the right answer when you keep a
 strict line between an employer's subscription and your own.
 
-Needs at least two signed-in accounts of the same provider to do anything.
+## Security posture
+
+- **Secrets are write-only through the API.** There is no endpoint that returns
+  a value. `{{secret:NAME}}` is resolved in the main process, at launch, into a
+  child's environment. A machine with no encryption provider gets a refusal, not
+  a plaintext file.
+- **Databases are read-only by default.** A write needs a writable connection
+  *and* an explicit confirmation, and is refused outright on a connection
+  flagged production. Stacked statements are refused; the classifier strips
+  comments first and looks through CTEs.
+- **Webhooks are signed.** GitHub sha256/sha1, GitLab token and a generic HMAC
+  header. A trigger with a secret refuses an unsigned delivery. Tokens and
+  secrets are generated server-side, never accepted from the client.
+- **MCP is scoped by project.** An agent cannot read or write another project's
+  backlog, memory or connections, even with an exact id.
+- **The LAN is gated by a per-run token**; loopback is open, everything else
+  needs it.
+- **SSH host keys are pinned** on first sight and a change is refused.
+- **Commit context is redacted** before being written, and stays in your repo.
 
 ## Layout
 
 ```
-main.go                        flags, banner, graceful shutdown
-internal/store/                persisted state + the cascade resolver
+main.go, mcp_cmd.go            flags, wiring, banner, the mcp subcommand
+internal/store/                persisted state, the cascade, generic collections
 internal/accounts/             profile directories, discovery, shared user layer
 internal/claudefs/             reads Claude's own on-disk files
-internal/session/              PTY manager, status heuristic, limit detector, auto-switch
+internal/session/              PTY manager, status, limit detector, auto-switch
+internal/ai/                   headless helper prompts on your own CLI
+internal/catalog/              14 built-in roles, subagent-markdown import
+internal/automation/           scheduler and webhook engine
+internal/gitx/                 git for the review pane
+internal/guard/                runaway-process finder
+internal/secrets/              the vault (DPAPI / AES-GCM)
+internal/dbx/                  read-only database access
+internal/sshx/                 saved hosts and tunnels
+internal/mcp/                  JSON-RPC server and the 16 tools
 internal/server/               HTTP API, websockets, embedded UI
 internal/server/web/           the UI (no build step)
 ```
@@ -235,18 +310,25 @@ internal/server/web/           the UI (no build step)
 go test ./...
 ```
 
-Covered: the cwd encoder against real transcript directories, the cascade in
-every direction, provider isolation, dangling references, folder cycles, the
-ring buffer's exact-wrap case, argument splitting, and the limit detector's
-true and false positives.
+52 tests. Covered: the cwd encoder against real transcript directories, the
+cascade in every direction, provider isolation, dangling references, folder
+cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
+detector's true and false positives, environment filtering, credential auth
+states, schedule arithmetic including short months, webhook signatures and
+gating, SQL write/stacked-statement classification, vault round-trips including
+"the value is not readable on disk", the MCP protocol and its project scope,
+JSON salvage, and the list-endpoint contract.
 
-## Not yet built
+Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
+checks including the failure cases, and an end-to-end automation run that fires
+a real signed webhook and asserts the interpolated prompt reached the terminal.
 
-Multi-provider agents (Codex, Grok and Cursor account plumbing is in place, the
-UI is Claude-only), split view, the kanban backlog, scheduled tasks, webhook
-triggers, MCP servers exposing the app to agents, and voice. The account model
-is provider-shaped already: each one isolates an account behind a single
-environment variable, so adding one is wiring, not a redesign.
+## Not built
+
+Cloud agents (needs a cloud provider), a public feedback portal for clients,
+Figma capture, a remote-fleet relay, and the non-Claude providers — the account
+model is provider-shaped and the env vars are wired, but only Claude is exercised.
+Mongo connections are saved and tunnelled but statements are not executed.
 
 ## Licence
 

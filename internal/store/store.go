@@ -323,17 +323,25 @@ func (s *Store) UpdateProject(id string, fn func(*Project)) (*Project, error) {
 	return nil, ErrNotFound
 }
 
-// DeleteProject removes a project and its agents.
+// DeleteProject removes a project and everything that belonged to it.
+//
+// The cascade matters: a project's tasks, ideas, memories, saved commands,
+// schedules and triggers are meaningless without it, and leaving them behind
+// means a deleted project keeps firing scheduled agents at a directory that is
+// no longer listed. Anything scoped to the project goes with it.
 func (s *Store) DeleteProject(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	found := false
 	pout := s.state.Projects[:0]
 	for _, p := range s.state.Projects {
-		if p.ID != id {
-			pout = append(pout, p)
+		if p.ID == id {
+			found = true
+			continue
 		}
+		pout = append(pout, p)
 	}
 	s.state.Projects = pout
+
 	aout := s.state.Agents[:0]
 	for _, a := range s.state.Agents {
 		if a.ProjectID != id {
@@ -341,7 +349,38 @@ func (s *Store) DeleteProject(id string) error {
 		}
 	}
 	s.state.Agents = aout
-	return s.saveLocked()
+
+	// Panes are keyed by project, so the saved layout goes too.
+	gout := s.state.Panes[:0]
+	for _, g := range s.state.Panes {
+		if g.ProjectID != id {
+			gout = append(gout, g)
+		}
+	}
+	s.state.Panes = gout
+
+	if err := s.saveLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+
+	if !found {
+		return ErrNotFound
+	}
+
+	// These take the lock themselves, so they run after it is released.
+	_, _ = s.tasks().delWhere(func(t *Task) bool { return t.ProjectID == id })
+	_, _ = s.ideas().delWhere(func(i *Idea) bool { return i.ProjectID == id })
+	_, _ = s.memories().delWhere(func(m *Memory) bool { return m.ProjectID == id })
+	_, _ = s.commands().delWhere(func(c *DevCommand) bool { return c.ProjectID == id })
+	_, _ = s.schedules().delWhere(func(x *Schedule) bool { return x.ProjectID == id })
+	_, _ = s.webhooks().delWhere(func(w *Webhook) bool { return w.ProjectID == id })
+	_, _ = s.messages().delWhere(func(m *AgentMessage) bool { return m.ProjectID == id })
+	// A prompt or skill scoped to the project goes; a global one stays.
+	_, _ = s.prompts().delWhere(func(x *Prompt) bool { return x.ProjectID == id })
+	_, _ = s.skills().delWhere(func(x *Skill) bool { return x.ProjectID == id })
+	return nil
 }
 
 // ---------- agents ----------

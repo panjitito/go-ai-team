@@ -377,8 +377,41 @@ func (m *Manager) waitLoop(s *Session) {
 		s.Status = StatusExited
 	}
 	s.mu.Unlock()
+
+	// The process has gone, but bytes it wrote just before exiting can still be
+	// sitting in the pseudo-terminal's buffer. Closing straight away discards
+	// them, and for a short command that is the entire output — `npm test`
+	// printing its result and exiting would show a blank terminal about one run
+	// in five. So wait for the reader to stop making progress before closing.
+	drainPTY(s)
 	_ = s.pty.Close()
 	m.emit(Event{Type: "session.exited", SessionID: s.ID, AgentID: s.AgentID, Payload: s.Public()})
+}
+
+// drainPTY waits until the read loop has stopped producing output, or until a
+// deadline. The cap matters: a child that inherited the terminal and is still
+// writing must not be able to hold a finished session open indefinitely.
+func drainPTY(s *Session) {
+	const (
+		quiet    = 120 * time.Millisecond
+		deadline = 3 * time.Second
+		poll     = 40 * time.Millisecond
+	)
+	stop := time.Now().Add(deadline)
+	last := s.ring.Total()
+	still := time.Now()
+	for time.Now().Before(stop) {
+		time.Sleep(poll)
+		now := s.ring.Total()
+		if now != last {
+			last = now
+			still = time.Now()
+			continue
+		}
+		if time.Since(still) >= quiet {
+			return
+		}
+	}
 }
 
 // Attach subscribes a client to a session's output and returns the scrollback so

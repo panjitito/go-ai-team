@@ -208,3 +208,67 @@ func TestDeleteProjectRemovesItsAgents(t *testing.T) {
 
 // timeAfter is a short deadline used to prove termination.
 func timeAfter() <-chan time.Time { return time.After(2 * time.Second) }
+
+// Deleting a project must take everything scoped to it. Leaving the rest behind
+// is not merely untidy: an orphaned schedule keeps firing agents at a directory
+// that is no longer listed anywhere in the app.
+func TestDeleteProjectCascades(t *testing.T) {
+	s := newTestStore(t)
+	_ = s.AddProject(&Project{ID: "prj_gone", Path: `C:\gone`})
+	_ = s.AddProject(&Project{ID: "prj_kept", Path: `C:\kept`})
+
+	for _, pid := range []string{"prj_gone", "prj_kept"} {
+		_ = s.AddAgent(&Agent{ProjectID: pid, Name: "a"})
+		_ = s.AddTask(&Task{ProjectID: pid, Title: "t"})
+		_ = s.AddIdea(&Idea{ProjectID: pid, Body: "i"})
+		_ = s.AddMemory(&Memory{ProjectID: pid, Title: "m", Body: "b"})
+		_ = s.AddCommand(&DevCommand{ProjectID: pid, Name: "c", Command: "echo"})
+		_ = s.AddSchedule(&Schedule{ProjectID: pid, Name: "s", Prompt: "p", Every: "daily"})
+		_ = s.AddWebhook(&Webhook{ProjectID: pid, Name: "w", Prompt: "p", Token: "tok_" + pid})
+		_ = s.AddMessage(&AgentMessage{ProjectID: pid, Subject: "hi"})
+		_ = s.AddPrompt(&Prompt{ProjectID: pid, Name: "p_" + pid, Body: "x"})
+		_ = s.AddSkill(&Skill{ProjectID: pid, Name: "k_" + pid, Body: "x"})
+	}
+	// A global prompt belongs to no project and must survive.
+	_ = s.AddPrompt(&Prompt{Name: "global", Body: "keep me"})
+	_ = s.SavePaneGroup(PaneGroup{ProjectID: "prj_gone", Orientation: "rows"})
+	_ = s.SavePaneGroup(PaneGroup{ProjectID: "prj_kept", Orientation: "cols"})
+
+	if err := s.DeleteProject("prj_gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	counts := map[string]int{
+		"agents":    len(s.Agents()),
+		"tasks":     len(s.Tasks()),
+		"ideas":     len(s.Ideas()),
+		"memories":  len(s.Memories()),
+		"commands":  len(s.Commands()),
+		"schedules": len(s.Schedules()),
+		"webhooks":  len(s.Webhooks()),
+		"messages":  len(s.Messages()),
+		"skills":    len(s.Skills()),
+	}
+	for name, got := range counts {
+		if got != 1 {
+			t.Errorf("%s: %d left, want 1 (only the kept project's)", name, got)
+		}
+	}
+	// Two prompts survive: the kept project's, and the global one.
+	if got := len(s.Prompts()); got != 2 {
+		t.Errorf("prompts: %d left, want 2 (kept project's plus the global one)", got)
+	}
+	if _, ok := s.PromptByName("global"); !ok {
+		t.Error("the global prompt was deleted with the project")
+	}
+	if _, ok := s.PaneGroup("prj_gone"); ok {
+		t.Error("the deleted project's pane layout survived")
+	}
+	if _, ok := s.PaneGroup("prj_kept"); !ok {
+		t.Error("the kept project's pane layout was removed")
+	}
+	// Deleting again must report not-found rather than silently succeeding.
+	if err := s.DeleteProject("prj_gone"); err == nil {
+		t.Error("deleting a project twice should report not-found")
+	}
+}

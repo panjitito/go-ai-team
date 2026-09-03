@@ -551,3 +551,23 @@ table.kv.wide td:last-child { text-align: left; }
   .board { grid-auto-flow: row; grid-auto-columns: auto; }
   .topbar { overflow-x: auto; }
 }
+
+/* ---------- grid blowout fix ----------
+ * A CSS grid track sized `1fr` is really `minmax(auto, 1fr)`, so it grows to
+ * fit its content instead of constraining it. With five board columns inside,
+ * that pushed the whole app wider than the window and scrolled the topbar off
+ * screen. `minmax(0, 1fr)` lets the track shrink, and the scroll then happens
+ * where it belongs — inside the board.
+ */
+#app { grid-template-columns: 268px minmax(0, 1fr); }
+.main > * { min-width: 0; }
+.board { min-width: 0; width: 100%; }
+.split { min-width: 0; }
+.review { min-width: 0; }
+
+/* A pane's terminal must not widen its column either. */
+.pane, .pane-term { min-width: 0; }
+
+@media (max-width: 780px) {
+  #app { grid-template-columns: minmax(0, 1fr); }
+}
