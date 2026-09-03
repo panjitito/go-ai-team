@@ -1,0 +1,7 @@
+# built binary
+/go-ai-team
+/go-ai-team.exe
+/dist/
+
+# local state (never commit: it lists account directories)
+/.goaiteam/

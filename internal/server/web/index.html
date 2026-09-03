@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Go AI Team</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23ff8a3d'/><text x='16' y='23' font-size='19' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='%231a1005'>G</text></svg>">
+<link rel="stylesheet" href="vendor/xterm.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <div class="brand">
+    <div class="logo">G</div>
+    <div>Go AI Team<br><small id="verLabel">multi-account cockpit</small></div>
+  </div>
+
+  <div class="topbar">
+    <button class="btn ghost sm" id="menuBtn" title="Projects">☰</button>
+    <button class="btn sm" id="accountsBtn">
+      <span class="dot" id="acctHealthDot"></span> Accounts <span id="acctCount" class="dim"></span>
+    </button>
+    <button class="btn sm" id="addProjectBtn">+ Project</button>
+
+    <span class="topsep"></span>
+    <button class="btn ghost sm" id="promptsBtn" title="Prompt library">Prompts</button>
+    <button class="btn ghost sm" id="skillsBtn" title="Skills library">Skills</button>
+    <button class="btn ghost sm" id="memoryBtn" title="Project memory">Memory</button>
+    <button class="btn ghost sm" id="rolesBtn" title="Agent roles">Roles</button>
+    <button class="btn ghost sm" id="autoBtn" title="Schedules and webhooks">Automation</button>
+    <button class="btn ghost sm" id="envBtn" title="Secrets, databases, SSH">Environment</button>
+
+    <span class="spacer"></span>
+    <span id="quotaWarn"></span>
+    <button class="btn ghost sm" id="guardBtn" title="Runaway processes">Guard</button>
+    <button class="btn ghost sm" id="doctorBtn" title="Diagnose setup">Doctor</button>
+    <button class="btn ghost sm" id="settingsBtn" title="Settings">Settings</button>
+  </div>
+
+  <div class="sidebar" id="sidebar"></div>
+
+  <div class="tabbar" id="tabbar"></div>
+
+  <div class="main" id="main"></div>
+
+  <div class="statusbar">
+    <span id="wsState">connecting…</span>
+    <span id="sessionSummary"></span>
+    <span class="spacer" style="flex:1"></span>
+    <span id="hostInfo"></span>
+  </div>
+</div>
+
+<div class="toast-host" id="toasts"></div>
+<div id="modalHost"></div>
+
+<script src="vendor/xterm.js"></script>
+<script src="vendor/xterm-addon-fit.js"></script>
+<script src="panels.js"></script>
+<script src="views.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
