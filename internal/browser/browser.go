@@ -25,6 +25,8 @@ import (
 type Mode string
 
 const (
+	// ModeDesktop opens a real application window with no browser involved.
+	ModeDesktop Mode = "desktop"
 	// ModeApp opens a chromeless window in the app's own profile.
 	ModeApp Mode = "app"
 	// ModeTab opens an ordinary tab in the app's own profile.
@@ -281,7 +283,9 @@ func openSystem(url string) error {
 // ParseMode reads the --browser flag.
 func ParseMode(s string) (Mode, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "app", "":
+	case "desktop", "native", "":
+		return ModeDesktop, nil
+	case "app":
 		return ModeApp, nil
 	case "tab":
 		return ModeTab, nil
@@ -290,5 +294,5 @@ func ParseMode(s string) (Mode, error) {
 	case "none", "off", "false":
 		return ModeNone, nil
 	}
-	return "", fmt.Errorf("unknown browser mode %q; use app, tab, system or none", s)
+	return "", fmt.Errorf("unknown window mode %q; use desktop, app, tab, system or none", s)
 }

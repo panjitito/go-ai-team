@@ -9,7 +9,10 @@ import (
 
 func TestParseMode(t *testing.T) {
 	cases := map[string]Mode{
-		"":        ModeApp,
+		// The default is a native window now, not a borrowed Chrome.
+		"":        ModeDesktop,
+		"desktop": ModeDesktop,
+		"native":  ModeDesktop,
 		"app":     ModeApp,
 		"APP":     ModeApp,
 		" app ":   ModeApp,

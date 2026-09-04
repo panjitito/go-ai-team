@@ -119,23 +119,53 @@ go build -o go-ai-team.exe .     # or: go build -o go-ai-team .
 ./go-ai-team.exe
 ```
 
-It opens in **its own Chrome profile**, as an app window — no address bar, no
-bookmark bar, its own taskbar entry, and none of your normal extensions,
-cookies or history. See below.
+It opens in **a real application window**: its own icon in the taskbar and
+Alt-Tab, native title bar and controls, no address bar, no tabs, and no browser
+to install or borrow. See below.
 
-### Its own browser profile
+### A native window, not Electron and not Chrome
 
-The whole bet of this project is that a browser is a better shell than Electron.
-That only holds if the window behaves like an application, so on start it opens
-a dedicated Chrome profile living at `~/.goaiteam/browser`:
+The UI is a web page, which is what lets the same app open on your phone and
+costs nothing to ship. What it should never have needed is *somebody else's
+browser* to display it — that meant a Chrome dependency, a profile directory to
+manage, and a window that was still recognisably a browser pretending not to be
+one.
+
+Windows already ships an embedded web view: **WebView2**, part of Edge, present
+on every Windows 11 machine. The app uses it directly. The binding is pure Go,
+so this is still one no-cgo binary; it grew by about a megabyte, not by the
+hundred that bundling a browser engine costs.
 
 ```
---browser app       own window, own profile   (default)
+--browser desktop   a real app window, no browser   (default)
+--browser app       chromeless window in the app's own Chrome profile
 --browser tab       ordinary tab, own profile
 --browser system    your normal browser and profile
 --browser none      open nothing
---browser-profile   put the profile somewhere else
+--browser-profile   put the Chrome profile somewhere else
 ```
+
+The window remembers where you left it — position, size, and whether it was
+maximized, keeping the restored size separately so maximising and quitting does
+not lose it. Closing it shuts the app down properly: what was running is
+recorded first, so **Restore on launch** brings it back.
+
+If the WebView2 runtime is missing, it falls back to `app` rather than failing —
+you get the UI in Chrome instead of an error. On macOS and Linux it falls back
+the same way, since the native window is Windows-only so far.
+
+Two Windows details worth knowing, both of which produced real bugs:
+
+- Windows **ignores the argument to the first `ShowWindow` call** in a process
+  and uses whatever the launcher put in `STARTUPINFO`. Anything that starts the
+  app minimized or hidden — a shortcut set to "Minimized", a scheduler, a
+  background shell — otherwise gets a window that never appears while the app
+  runs and listens invisibly, which looks exactly like a crash. It is shown a
+  second time, deliberately.
+- It stays a **console** program, because it has flags, an `mcp` subcommand and a
+  banner carrying the phone URL and token. In desktop mode the console window is
+  hidden only when this process is the sole thing attached to it — launched from
+  a terminal, that terminal is yours and is left alone.
 
 Chrome, Edge, Brave, Vivaldi and Chromium are all driven the same way; whichever
 is found first is used, and if none is present it falls back to your default
@@ -355,6 +385,7 @@ internal/sshx/                 saved hosts and tunnels
 internal/mcp/                  JSON-RPC server and the 16 tools
 internal/server/               HTTP API, websockets, embedded UI
 internal/server/web/           the UI (no build step)
+internal/desktop/              the native window (WebView2, pure Go)
 ```
 
 ## Tests
@@ -371,7 +402,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-72 tests. Covered: the cwd encoder against real transcript directories, the
+75 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth
@@ -395,6 +426,9 @@ that review had not caught. Each keeps its own evidence:
 - **A limit match is confirmed before an account is benched.** See above.
 - **No two UI scripts may declare the same top-level name.** They share one global
   scope, so the file that loads last silently replaces the other's helper.
+- **A window must be shown twice on Windows.** The first ShowWindow call in a
+  process is overridden by whatever the launcher asked for, so a shortcut set to
+  "Minimized" produced an app that ran, listened, and never appeared.
 
 Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
 checks including the failure cases, and an end-to-end automation run that fires

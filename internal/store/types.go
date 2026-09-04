@@ -141,6 +141,10 @@ type Settings struct {
 	// when the app was last closed.
 	RestoreOnLaunch bool `json:"restoreOnLaunch"`
 
+	// Window is the native window's last position and size, so the app reopens
+	// where it was left instead of jumping back to the middle of the screen.
+	Window *WindowBounds `json:"window,omitempty"`
+
 	// ProcessGuard sweeps agent child processes for ones that are large, old
 	// and idle on the processor, and flags them. Nothing is ever killed without
 	// being asked for.
@@ -205,4 +209,14 @@ type State struct {
 	Panes    []PaneGroup     `json:"panes,omitempty"`
 	Messages []*AgentMessage `json:"messages,omitempty"`
 	Restore  []RestoreEntry  `json:"restore,omitempty"`
+}
+
+// WindowBounds is the desktop window's remembered geometry. Kept here rather
+// than in a separate file so it is saved and restored with everything else.
+type WindowBounds struct {
+	X         int  `json:"x"`
+	Y         int  `json:"y"`
+	W         int  `json:"w"`
+	H         int  `json:"h"`
+	Maximized bool `json:"maximized"`
 }

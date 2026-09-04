@@ -35,6 +35,7 @@ import (
 	"github.com/uniair/go-ai-team/internal/catalog"
 	"github.com/uniair/go-ai-team/internal/claudefs"
 	"github.com/uniair/go-ai-team/internal/dbx"
+	"github.com/uniair/go-ai-team/internal/desktop"
 	"github.com/uniair/go-ai-team/internal/secrets"
 	"github.com/uniair/go-ai-team/internal/server"
 	"github.com/uniair/go-ai-team/internal/session"
@@ -60,8 +61,8 @@ func main() {
 		port   = flag.Int("port", 0, "port to listen on (default: saved setting, else 7777)")
 		host   = flag.String("host", "127.0.0.1", "address to bind; use 0.0.0.0 to reach it from your phone")
 		open   = flag.Bool("open", true, "open the UI on start")
-		browse = flag.String("browser", "app",
-			"how to open it: app (own window, own Chrome profile), tab, system (your normal browser), none")
+		browse = flag.String("browser", "desktop",
+			"how to open it: desktop (a real app window, no browser), app (own Chrome profile), tab, system (your normal browser), none")
 		profile = flag.String("browser-profile", "",
 			"where the app's Chrome profile lives (default: <state>/browser)")
 		shortcut = flag.Bool("install-shortcut", false,
@@ -140,7 +141,15 @@ func main() {
 	localURL := fmt.Sprintf("http://localhost:%d", listenPort)
 	printBanner(listenPort, localURL, app.token, app.loopback, app.st.RootDir(), app.vault != nil)
 
-	if mode != browser.ModeNone {
+	// A native window is preferred and falls back rather than failing: a machine
+	// without the WebView2 runtime should still get its UI, just in a browser.
+	if mode == browser.ModeDesktop {
+		if ok, _ := desktop.Available(); !ok {
+			mode = browser.ModeApp
+		}
+	}
+
+	if mode != browser.ModeNone && mode != browser.ModeDesktop {
 		go func() {
 			// A moment for the listener to be serving, so the first request is
 			// not a connection refused that the user sees as a blank window.
@@ -164,22 +173,93 @@ func main() {
 		}
 	}()
 
+	shutdown := func(why string) {
+		fmt.Printf("\n%s…\n", why)
+		// Record what was running before killing it, so "restore on launch" has
+		// something to restore.
+		app.srv.SaveRestoreState()
+		stopBackground()
+		for _, s := range app.sm.Sessions() {
+			_ = app.sm.Stop(s.ID)
+		}
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(shutCtx)
+		fmt.Println("bye.")
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-	fmt.Println("\nshutting down…")
 
-	// Record what was running before killing it, so "restore on launch" has
-	// something to restore.
-	app.srv.SaveRestoreState()
-	stopBackground()
-	for _, s := range app.sm.Sessions() {
-		_ = app.sm.Stop(s.ID)
+	if mode == browser.ModeDesktop {
+		// A desktop app does not leave a console box sitting behind its window.
+		// Only ours is hidden — a terminal we were launched from keeps its own.
+		desktop.HideOwnConsole()
+
+		// The window owns the main thread from here: Windows requires the
+		// message loop to run on the thread that created the window, and main
+		// is the only thread we can guarantee that for. Ctrl-C still works —
+		// closing the window from the signal handler ends the loop, and control
+		// returns here either way.
+		if err := runDesktop(app, localURL, sig); err != nil {
+			log.Printf("could not open the app window (%v); visit %s", err, localURL)
+			<-sig
+		}
+		shutdown("shutting down")
+		return
 	}
-	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = httpSrv.Shutdown(shutCtx)
-	fmt.Println("bye.")
+
+	<-sig
+	shutdown("shutting down")
+}
+
+// runDesktop shows the app window and returns when it closes.
+func runDesktop(app *app, url string, sig <-chan os.Signal) error {
+	state := app.st.RootDir()
+	desktop.EnsureIcon(state)
+
+	var start desktop.Bounds
+	if b := app.st.Settings().Window; b != nil {
+		start = desktop.Bounds{X: b.X, Y: b.Y, W: b.W, H: b.H, Maximized: b.Maximized}
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+	closer := make(chan func(), 1)
+	go func() {
+		// Wait for the window to exist before there is anything to close. A
+		// Ctrl-C that arrives during startup is not lost: sig is buffered, so it
+		// is still waiting to be read on the next line.
+		var stop func()
+		select {
+		case stop = <-closer:
+		case <-done:
+			return
+		}
+		// Ctrl-C in the terminal should take the window down with it, rather
+		// than leave it on screen after the process has gone.
+		select {
+		case <-sig:
+			stop()
+		case <-done:
+		}
+	}()
+
+	return desktop.Run(desktop.Opts{
+		URL:     url,
+		Title:   "Go AI Team",
+		DataDir: filepath.Join(state, "window"),
+		Start:   start,
+		Ready:   func(stop func()) { closer <- stop },
+		OnClose: func(b desktop.Bounds) {
+			if !b.Valid() {
+				return
+			}
+			_, _ = app.st.UpdateSettings(func(s *store.Settings) {
+				s.Window = &store.WindowBounds{X: b.X, Y: b.Y, W: b.W, H: b.H, Maximized: b.Maximized}
+			})
+		},
+	})
 }
 
 // app holds the assembled subsystems.

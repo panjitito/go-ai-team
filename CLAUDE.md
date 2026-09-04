@@ -60,6 +60,17 @@ along with every other agent it was running. `Session.closePTY` now guards it
 with a `sync.Once`. Never add another `pty.Close()` call — route it through
 `closePTY`.
 
+## The first ShowWindow call is not yours
+
+Windows ignores the argument to the *first* `ShowWindow` in a process and uses
+whatever the launcher put in `STARTUPINFO`. Anything that starts the app
+minimized or hidden — a shortcut set to "Minimized", a scheduler, a background
+shell — then gets a window that never appears while the app runs and listens
+invisibly. It looks exactly like a crash.
+
+`internal/desktop` shows the window a second time on purpose. Do not "tidy" that
+away.
+
 ## Shell gotcha
 
 Writing Go or JS source through a bash heredoc into Python mangles backslash
