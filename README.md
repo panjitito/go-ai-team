@@ -1,4 +1,4 @@
-| **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and see it as a picture in the conversation afterwards rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |# Go AI Team
+# Go AI Team
 
 An open cockpit for Claude Code and friends: run every account you own side by
 side, drive a board, schedule and trigger agents, review what they wrote, and
@@ -62,7 +62,8 @@ point, since the alternative charges per month for a few hundred of them.
 |---|---|
 | **Agent grid** | Role colours, live status dots, account dot on every avatar. |
 | **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. The terminal is a toggle away. |
-| **Paste an image** | Paste or drop a screenshot into the composer. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |
+| **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and read it back as a picture rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |
+| **Files** | Browse the project, read a file with line numbers and highlighting, edit it and save. A save carries the hash the file was opened at, so if an agent rewrote it meanwhile the save is refused rather than clobbering their work. |
 | **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
 | **Live terminals** | Real PTYs over websocket into xterm.js, 256KB scrollback replayed on attach. |
 | **Morph** | Change a running agent's role in place, keeping its conversation. Optional "fresh eyes". |
@@ -93,6 +94,7 @@ point, since the alternative charges per month for a few hundred of them.
 | | |
 |---|---|
 | **Per-agent diff** | Filter the working tree by which agent touched which file, read back from each agent's own transcript. |
+| **Split diff** | Side by side with line numbers on both sides, git's own hunk context, and the changed fragment marked *inside* an edited line — so a renamed variable does not look like a rewritten one. Unified is a toggle away, and a new file shows its contents instead of "no textual diff". |
 | **Commit messages** | Written from the real staged diff, in your house style. |
 | **Commit context** | Attaches the agent conversation behind a commit as a file in the repo, credentials stripped. Nothing is uploaded. |
 | **Token meter** | Input, output, cache writes and reads, cache hit rate, tool uses, models routed — straight from Claude's own JSONL. |
@@ -402,7 +404,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-92 tests. Covered: the cwd encoder against real transcript directories, the
+101 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth

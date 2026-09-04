@@ -142,6 +142,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/settings", s.patchSettings)
 	mux.HandleFunc("GET /api/doctor", s.doctor)
 	mux.HandleFunc("GET /api/fs/list", s.listDir)
+	mux.HandleFunc("GET /api/files/tree", s.fileTree)
+	mux.HandleFunc("GET /api/files/read", s.readFile)
+	mux.HandleFunc("PUT /api/files/write", s.writeFile)
 
 	// --- the rest, grouped by area ---
 	s.routeWork(mux)

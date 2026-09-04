@@ -47,6 +47,7 @@ const TABS = [
   ['split',     'Split'],
   ['board',     'Board'],
   ['review',    'Review'],
+  ['files',     'Files'],
   ['terminals', 'Terminals'],
   ['stats',     'Stats'],
 ];
@@ -310,7 +311,7 @@ function renderMain() {
 
   // Every tab but the grid renders asynchronously, because each fetches the
   // data it needs. Errors surface as a toast from tryApi.
-  const async_views = { split: viewSplit, board: viewBoard, review: viewReview,
+  const async_views = { split: viewSplit, board: viewBoard, review: viewReview, files: viewFiles,
                         terminals: viewTerminals, stats: viewStats };
   if (async_views[S.view]) {
     async_views[S.view](main).catch(e => {

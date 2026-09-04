@@ -294,7 +294,7 @@ new Promise(async resolve => {
 		t.Errorf("errors during load: %s", errs)
 	}
 
-	tabs := []string{"Agents", "Split", "Board", "Review", "Terminals", "Stats"}
+	tabs := []string{"Agents", "Split", "Board", "Review", "Files", "Terminals", "Stats"}
 	for _, name := range tabs {
 		out := c.evalString(t, fmt.Sprintf(`
 new Promise(async resolve => {

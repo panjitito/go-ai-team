@@ -349,27 +349,6 @@ async function viewReview(main) {
   main.append(split);
 }
 
-// renderDiff colours a unified diff without a syntax library: the line prefix
-// is all the information needed, and a real highlighter would be far more code
-// than the value it adds here.
-function renderDiff(text) {
-  const box = el('div', { class: 'diff' });
-  if (!text.trim()) {
-    box.append(el('div', { class: 'hint', style: 'padding:14px', text: 'No textual diff (binary, or no change).' }));
-    return box;
-  }
-  for (const line of text.split('\n')) {
-    let cls = 'ctx';
-    if (line.startsWith('+++') || line.startsWith('---')) cls = 'meta';
-    else if (line.startsWith('@@')) cls = 'hunk';
-    else if (line.startsWith('diff ') || line.startsWith('index ')) cls = 'meta';
-    else if (line.startsWith('+')) cls = 'add';
-    else if (line.startsWith('-')) cls = 'del';
-    box.append(el('div', { class: 'dl ' + cls, text: line || ' ' }));
-  }
-  return box;
-}
-
 function openCommit(p, st) {
   const agents = [...new Set(st.files.map(f => f.agentId).filter(Boolean))];
   const body = el('div', {},

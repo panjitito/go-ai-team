@@ -202,13 +202,33 @@ func Diff(ctx context.Context, dir, path string, staged bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(out) == "" && path != "" && !staged {
-		// Probably untracked: show it as an addition so review is not blank.
-		if body, err := run(ctx, dir, "diff", "--no-index", "--no-color", nullDevice(), path); err == nil {
+	// An empty diff has two very different causes: the file is untracked, or it
+	// simply has not changed. Only the first should fall through to showing the
+	// whole file as an addition — doing it for the second reported every
+	// unchanged file in the repository as brand new.
+	if strings.TrimSpace(out) == "" && path != "" && !staged && !isTracked(ctx, dir, path) {
+		// Untracked: `git diff` has nothing to say about a file it does not know,
+		// so diff it against nothing and show it as an addition. Otherwise every
+		// new file a review is about reads "no textual diff", which is the one
+		// case where you most want to see the code.
+		//
+		// This has to tolerate exit status 1. `git diff --no-index` reports 1 to
+		// mean "the files differ" — which is the whole point of asking — and
+		// treating that as failure threw away a perfectly good diff and produced
+		// exactly the blank pane this fallback exists to prevent.
+		if body, code, err := runAllowExit(ctx, dir, 1,
+			"diff", "--no-index", "--no-color", nullDevice(), path); err == nil && (code == 0 || code == 1) {
 			return body, nil
 		}
 	}
 	return out, nil
+}
+
+// isTracked reports whether git already knows this path. It is what separates
+// "new file" from "unchanged file", which produce an identical empty diff.
+func isTracked(ctx context.Context, dir, path string) bool {
+	_, err := run(ctx, dir, "ls-files", "--error-unmatch", "--", path)
+	return err == nil
 }
 
 // nullDevice is the empty side of a no-index diff.
@@ -341,4 +361,37 @@ func CreateBranch(ctx context.Context, dir, name string) error {
 func Init(ctx context.Context, dir string) error {
 	_, err := run(ctx, dir, "init")
 	return err
+}
+
+// runAllowExit runs git and returns its output along with the exit status,
+// rather than discarding everything when the status is not zero.
+//
+// Some git commands use the exit code as an answer rather than as a failure:
+// `diff --no-index` returns 1 to say "these differ", which is the reason it was
+// called. Callers say which non-zero codes are answers.
+func runAllowExit(ctx context.Context, dir string, allow int, args ...string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	var out, errb bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	if err == nil {
+		return out.String(), 0, nil
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		code := ee.ExitCode()
+		if code == allow {
+			return out.String(), code, nil
+		}
+		msg := strings.TrimSpace(errb.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", code, fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+	}
+	return "", -1, err
 }

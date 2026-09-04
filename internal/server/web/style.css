@@ -488,13 +488,6 @@ pre.wrap {
 .review-row .minus { color: var(--bad); }
 .review-diff { overflow: auto; background: #07090b; }
 
-.diff { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; padding: 6px 0; }
-.diff .dl { padding: 0 12px; white-space: pre; }
-.diff .add { background: #0f2417; color: #a7f3c4; }
-.diff .del { background: #2a1618; color: #ffb4b4; }
-.diff .hunk { color: var(--info); background: var(--bg-2); }
-.diff .meta { color: var(--fg-mute); }
-.diff .ctx { color: var(--fg-dim); }
 
 /* ---------- split view ---------- */
 
@@ -824,3 +817,113 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
   border-radius: 8px; box-shadow: 0 18px 60px rgba(0, 0, 0, .6);
 }
 .lightbox-name { font-size: 12px; color: #cfd6e2; }
+
+/* ---------- diff, read the way a review is actually done ---------- */
+
+.diffv { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.diff-bar {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--bg-1);
+}
+.diff-stat { display: flex; gap: 7px; font: 11px var(--mono); }
+.diff-stat .st-add { color: var(--ok); }
+.diff-stat .st-del { color: var(--bad); }
+.diff-body { overflow: auto; flex: 1; min-height: 0; }
+
+.diff-hunk {
+  display: flex; gap: 10px; align-items: center;
+  padding: 4px 12px; background: var(--bg-2); color: var(--info);
+  font: 11px var(--mono); position: sticky; top: 0; z-index: 1;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.diff-hunk-label { color: var(--fg-mute); }
+
+.diff-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
+}
+/* Line numbers are not selectable: copying a diff should give you the code,
+   not the code with numbers interleaved through it. */
+.diff-table .dn {
+  width: 1%; min-width: 44px; text-align: right;
+  padding: 0 8px; color: var(--fg-mute); background: var(--bg-1);
+  user-select: none; vertical-align: top; white-space: nowrap;
+  border-right: 1px solid var(--line);
+}
+.diff-table .dc {
+  padding: 0 10px; white-space: pre-wrap; word-break: break-word;
+  vertical-align: top; color: var(--fg-dim);
+}
+.diff-table .dc.add { background: #0f2417; color: #cdf3dd; }
+.diff-table .dc.del { background: #2a1618; color: #ffd0d0; }
+.diff-table .dc.empty { background: var(--bg); }
+.diff-table.split .dc { width: 50%; }
+.diff-table .dsign { color: var(--fg-mute); user-select: none; margin-right: 6px; }
+
+/* The part of the line that actually changed. Without this a renamed variable
+   and a rewritten line look identical. */
+.dw-add { background: #1d5b39; color: #eafff2; border-radius: 3px; }
+.dw-del { background: #6d2530; color: #ffe8e8; border-radius: 3px; }
+
+/* ---------- files ---------- */
+
+.files { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
+.files-tree { overflow: auto; border-right: 1px solid var(--line); padding: 6px 0; }
+.files-pane { overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+
+.tw-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 6px; cursor: pointer; color: var(--fg-dim);
+  white-space: nowrap; font-size: 13px;
+}
+.tw-row:hover { background: var(--bg-2); color: var(--fg); }
+.tw-row.active { background: var(--bg-3); color: var(--fg); }
+.tw-row.dir { font-weight: 560; color: var(--fg); }
+.tw-row.changed .tw-name { color: var(--warn); }
+.tw-caret { width: 10px; color: var(--fg-mute); flex: none; }
+.tw-name { overflow: hidden; text-overflow: ellipsis; }
+.tw-status {
+  font: 10px var(--mono); color: var(--warn);
+  background: var(--bg); padding: 0 5px; border-radius: 20px; margin-left: auto;
+}
+
+.file-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg-1);
+}
+.file-name { font: 12.5px var(--mono); overflow: hidden; text-overflow: ellipsis; }
+
+/* One scroller for code and its gutter, so the numbers cannot drift out of
+   step with the lines they belong to. */
+.code-wrap { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+.code-gutter {
+  flex: none; overflow: hidden; text-align: right;
+  padding: 8px 8px 8px 12px; background: var(--bg-1);
+  border-right: 1px solid var(--line); user-select: none;
+}
+.code-gutter .ln {
+  font: 11.5px/1.55 var(--mono); color: var(--fg-mute); height: 1.55em;
+}
+.code-body {
+  flex: 1; margin: 0; padding: 8px 12px; overflow: auto;
+  font: 11.5px/1.55 var(--mono); white-space: pre; tab-size: 4;
+}
+.code-body .cl { height: 1.55em; }
+.code-edit {
+  flex: 1; margin: 0; padding: 8px 12px; border: 0; outline: none; resize: none;
+  background: var(--bg); color: var(--fg);
+  font: 11.5px/1.55 var(--mono); white-space: pre; tab-size: 4; overflow: auto;
+  border-radius: 0;
+}
+.code-edit:focus { border: 0; }
+
+.tk-kw  { color: #c084fc; }
+.tk-str { color: #86efac; }
+.tk-num { color: #fbbf24; }
+.tk-com { color: var(--fg-mute); font-style: italic; }
+
+@media (max-width: 780px) {
+  .files { grid-template-columns: 1fr; grid-template-rows: 200px 1fr; }
+  .files-tree { border-right: 0; border-bottom: 1px solid var(--line); }
+  .diff-table.split .dc { width: auto; }
+}
