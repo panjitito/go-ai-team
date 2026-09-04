@@ -99,6 +99,14 @@ function applyChatMode(sessionId) {
   const comp = document.querySelector('.composer-wrap');
   if (comp) comp.style.display = chat ? '' : 'none';
 
+  // The banner belongs to the conversation view only. It exists to say "this
+  // question is not in the transcript, go and look at the terminal" — so on the
+  // terminal it is answering a question you are already looking at, while
+  // repeating its text and taking half the screen. It was also never hidden on
+  // the way in, so whatever it last said stayed pinned above the terminal.
+  const bnr = $('#chatBanner');
+  if (bnr && !chat) bnr.style.display = 'none';
+
   for (const b of document.querySelectorAll('[data-mode]')) {
     b.classList.toggle('primary', b.getAttribute('data-mode') === S.chatMode);
   }

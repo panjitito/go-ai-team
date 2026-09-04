@@ -17,18 +17,23 @@ import (
 // to switch to the terminal rather than leaving the person stuck.
 
 var promptPatterns = []*regexp.Regexp{
-	// The selection cursor Claude Code draws next to the highlighted option.
-	regexp.MustCompile(`(?m)^\s*[❯>]\s+\S`),
+	// The selection cursor on a numbered option, which is the shape every one of
+	// these prompts actually takes: "❯ 1. Yes".
+	//
+	// This used to be `^\s*[❯>]\s+\S` — a prompt marker followed by anything —
+	// and it was wrong twice over. A bare ">" begins every quoted message Claude
+	// Code renders, so an agent that had merely been *talked to* looked like an
+	// agent asking a question; and "❯ " is also the empty composer, which is on
+	// screen permanently. The banner then sat there claiming an idle agent was
+	// waiting for an answer, over a terminal that plainly showed it was not.
+	regexp.MustCompile(`(?m)^\s*❯\s+\d+[.)]\s`),
+	regexp.MustCompile(`(?im)^\s*❯\s+(yes|no)\b`),
 	regexp.MustCompile(`(?i)enter to confirm`),
 	regexp.MustCompile(`(?i)esc to cancel`),
-	regexp.MustCompile(`(?i)do you (want|trust)`),
-	regexp.MustCompile(`(?i)\(y/n\)`),
 	regexp.MustCompile(`(?i)yes,? I trust`),
-	regexp.MustCompile(`(?i)press enter to`),
-	regexp.MustCompile(`(?i)select an option`),
+	regexp.MustCompile(`(?i)do you trust the files`),
 	// The sign-in flow, which is the other thing that needs the terminal.
-	regexp.MustCompile(`(?i)paste (the )?code`),
-	regexp.MustCompile(`(?i)/login`),
+	regexp.MustCompile(`(?i)paste (the )?code here`),
 }
 
 // promptTitles maps a recognised prompt to a short description, so the banner
@@ -37,20 +42,19 @@ var promptTitles = []struct {
 	re    *regexp.Regexp
 	title string
 }{
-	{regexp.MustCompile(`(?i)trust this folder|quick safety check`), "It is asking whether you trust this folder"},
-	{regexp.MustCompile(`(?i)paste (the )?code|/login`), "It is waiting for you to sign in"},
+	{regexp.MustCompile(`(?i)trust this folder|quick safety check|do you trust the files`), "It is asking whether you trust this folder"},
+	{regexp.MustCompile(`(?i)paste (the )?code here`), "It is waiting for you to sign in"},
 	{regexp.MustCompile(`(?i)do you want to`), "It is asking permission to do something"},
-	{regexp.MustCompile(`(?i)select an option|choose`), "It is waiting for you to choose an option"},
 }
 
 // NeedsTerminal reports whether the tail of a terminal looks like an
 // interactive prompt awaiting a keypress, and what it appears to be asking.
 func NeedsTerminal(tail string) (bool, string) {
 	clean := stripANSI(tail)
-	// Only the last part matters: an old prompt further up the scrollback has
-	// already been answered.
-	if len(clean) > 4000 {
-		clean = clean[len(clean)-4000:]
+	// Only the current frame. A prompt answered a minute ago is still sitting in
+	// the scrollback, and matching that would keep the banner up forever.
+	if len(clean) > 2000 {
+		clean = clean[len(clean)-2000:]
 	}
 	hit := false
 	for _, p := range promptPatterns {

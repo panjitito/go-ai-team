@@ -538,6 +538,15 @@ func (m *Manager) Remove(id string) error {
 	if !ok {
 		return store.ErrNotFound
 	}
+	// Release the incremental parse state for this session's transcript. It is
+	// only useful while something is polling the file, and a day of finished
+	// agents would otherwise each keep their own copy alive.
+	s.mu.Lock()
+	tp := s.Tokens.Path
+	s.mu.Unlock()
+	if tp != "" {
+		claudefs.ForgetTranscript(tp)
+	}
 	if !s.terminal() {
 		_ = m.Stop(id)
 	}
@@ -627,6 +636,7 @@ func (m *Manager) refresh(s *Session) {
 	s.mu.Lock()
 	pid, dir, cwd, provider := s.PID, s.AccountDir, s.CWD, s.Provider
 	sid := s.ClaudeSessionID
+	verified := s.AccountVerified
 	s.mu.Unlock()
 
 	// The status heuristic must run for every session, including one that has
@@ -643,14 +653,23 @@ func (m *Manager) refresh(s *Session) {
 	// Discover the CLI's own session id from its metafile. Searching every known
 	// account directory keeps this correct even after an auto-switch moved the
 	// session somewhere else.
-	if sid == "" {
-		dirs := []string{dir}
-		dirs = append(dirs, m.accs.Dirs(provider)...)
+	//
+	// Re-read every poll rather than latched on the first answer. The id a
+	// session starts with is not necessarily the one it keeps: a bare --resume
+	// opens a picker, and choosing a conversation switches the CLI to that
+	// conversation's id and rewrites the metafile. Typing /resume mid-session
+	// does the same. Reading once left the app pointing at a transcript that had
+	// never existed — an empty conversation view and a zero token meter on a
+	// session with hours of history in it, which is exactly what it looks like
+	// when the app is broken.
+	dirs := []string{dir}
+	dirs = append(dirs, m.accs.Dirs(provider)...)
 
-		// The owning directory is knowable as soon as the session starts, from
-		// the <pid>.key file, whereas the session id only appears once Claude
-		// writes <pid>.json. Confirming the owner first means the account badge
-		// is verified against disk long before there is a transcript to read.
+	// The owning directory is knowable as soon as the session starts, from
+	// the <pid>.key file, whereas the session id only appears once Claude
+	// writes <pid>.json. Confirming the owner first means the account badge
+	// is verified against disk long before there is a transcript to read.
+	if !verified {
 		if owner, ok := claudefs.SessionOwnerDir(dirs, pid); ok {
 			s.mu.Lock()
 			if s.AccountDir != owner {
@@ -660,17 +679,21 @@ func (m *Manager) refresh(s *Session) {
 			s.mu.Unlock()
 			dir = owner
 		}
+	}
 
-		if meta := claudefs.FindSessionMeta(dirs, pid); meta != nil {
+	if meta := claudefs.FindSessionMeta(dirs, pid); meta != nil && meta.SessionID != "" {
+		if meta.SessionID != sid {
 			sid = meta.SessionID
 			s.mu.Lock()
 			s.ClaudeSessionID = sid
 			if meta.Dir != "" {
 				s.AccountDir = meta.Dir
-				dir = meta.Dir
 			}
 			s.mu.Unlock()
 			m.emit(Event{Type: "session.identified", SessionID: s.ID, AgentID: s.AgentID, Payload: s.Public()})
+		}
+		if meta.Dir != "" {
+			dir = meta.Dir
 		}
 	}
 

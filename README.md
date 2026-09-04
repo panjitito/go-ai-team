@@ -402,7 +402,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-75 tests. Covered: the cwd encoder against real transcript directories, the
+86 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth
@@ -429,6 +429,14 @@ that review had not caught. Each keeps its own evidence:
 - **A window must be shown twice on Windows.** The first ShowWindow call in a
   process is overridden by whatever the launcher asked for, so a shortcut set to
   "Minimized" produced an app that ran, listened, and never appeared.
+- **A session's id is not fixed for the life of the process.** `--resume` opens a
+  picker, and choosing a conversation switches the CLI to that conversation's id.
+  Reading the metafile once left the app pointing at a transcript that had never
+  existed: an empty chat view and a zero token meter on a session with hours of
+  history behind it.
+- **A transcript is read incrementally, and only its tail.** A real one here was
+  257MB. Parsing it whole cost 762ms per poll and 1.24s per 1.5s refresh; now it
+  is 0ms and ~100ms.
 
 Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
 checks including the failure cases, and an end-to-end automation run that fires

@@ -14,6 +14,7 @@ package claudefs
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -355,27 +356,69 @@ func FindTranscript(dir, cwd, sessionID string) (string, bool) {
 // writes per message. There is no estimation here: the four counters come
 // straight off the wire record.
 func ParseTranscript(path string) (TokenStats, error) {
-	var t TokenStats
-	t.Path = path
 	f, err := os.Open(path)
 	if err != nil {
-		return t, err
+		return TokenStats{Path: path}, err
 	}
 	defer f.Close()
 
-	sc := bufio.NewScanner(f)
-	// Transcripts carry whole tool results on a single line; the default 64KB
-	// token is far too small and would silently truncate the parse.
-	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
+	st, err := f.Stat()
+	if err != nil {
+		return TokenStats{Path: path}, err
+	}
 
-	seenModel := map[string]bool{}
-	for sc.Scan() {
-		b := sc.Bytes()
+	// Resume where the last parse stopped. See incremental.go: a transcript is
+	// append-only and can be hundreds of megabytes, and this runs on a poll.
+	r := loadResume(path, st.Size())
+	if r == nil {
+		r = &resume{models: map[string]bool{}}
+	}
+	if r.off >= st.Size() {
+		// Nothing new since last time.
+		out := r.stats
+		out.Path = path
+		out.Models = append([]string(nil), r.stats.Models...)
+		return out, nil
+	}
+	if r.off > 0 {
+		if _, err := f.Seek(r.off, io.SeekStart); err != nil {
+			return TokenStats{Path: path}, err
+		}
+	}
+
+	t := r.stats
+	t.Path = path
+	seenModel := r.models
+	off := r.off
+
+	// Read with an explicit reader rather than a Scanner: the offset has to be
+	// exact so the next parse resumes on a record boundary, and a Scanner does
+	// not report how many bytes it consumed.
+	br := bufio.NewReaderSize(f, 256*1024)
+	for {
+		line, readErr := br.ReadBytes('\n')
+		if len(line) > 0 && line[len(line)-1] != '\n' {
+			// A record still being written. Leave it for next time rather than
+			// counting half of it.
+			break
+		}
+		if len(line) == 0 {
+			break
+		}
+		off += int64(len(line))
+
+		b := trimEOL(line)
 		if len(b) == 0 || b[0] != '{' {
+			if readErr != nil {
+				break
+			}
 			continue
 		}
 		var l jsonlLine
 		if json.Unmarshal(b, &l) != nil {
+			if readErr != nil {
+				break
+			}
 			continue
 		}
 		if l.SessionID != "" {
@@ -406,12 +449,25 @@ func ParseTranscript(path string) (TokenStats, error) {
 			}
 			t.ToolUses += countToolUses(l.Message.Content)
 		}
+		if readErr != nil {
+			break
+		}
 	}
-	if err := sc.Err(); err != nil {
-		return t, err
-	}
+
 	sort.Strings(t.Models)
-	return t, nil
+	saveResume(path, &resume{off: off, size: st.Size(), stats: t, models: seenModel})
+
+	out := t
+	out.Models = append([]string(nil), t.Models...)
+	return out, nil
+}
+
+// trimEOL strips the line ending a reader kept.
+func trimEOL(b []byte) []byte {
+	for len(b) > 0 && (b[len(b)-1] == '\n' || b[len(b)-1] == '\r') {
+		b = b[:len(b)-1]
+	}
+	return b
 }
 
 // countToolUses counts tool_use blocks in an assistant message's content array.

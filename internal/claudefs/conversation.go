@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -91,20 +92,88 @@ type convBlock struct {
 	IsError   bool            `json:"is_error"`
 }
 
+// How much of the end of a transcript to read.
+//
+// A long-running session's transcript is not small: a real one here was 257MB,
+// and the conversation view polls it every 1.5 seconds. Reading the whole file
+// took 1.2 seconds of that, so the app would have spent most of its life
+// re-reading a file in order to show the last screenful of it, and the disk
+// would never have stopped. Only the last `limit` messages are ever displayed,
+// so only the tail is read — widened if that turns out not to hold enough.
+const (
+	convTailStart = 4 << 20
+	convTailMax   = 32 << 20
+
+	// convTailTarget is how many messages are worth widening the window for.
+	//
+	// Not the caller's limit. On the transcript measured above, reaching 200
+	// messages meant reading 64MB and 333ms, while 16MB gave 61 messages in
+	// 97ms — and 61 is already far more than fits on a screen. Chasing the full
+	// limit bought scrollback nobody had asked to read yet, every 1.5 seconds.
+	convTailTarget = 60
+)
+
 // ParseConversation reads a transcript into renderable messages.
 //
 // Consecutive assistant output is merged into one message, because Claude emits
 // a separate record per API response and showing each as its own bubble turns a
 // single answer into a dozen fragments.
 func ParseConversation(path string, limit int) ([]Message, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	if msgs, ok := loadConv(path, limit); ok {
+		return msgs, nil
+	}
+
+	want := limit
+	if want > convTailTarget {
+		want = convTailTarget
+	}
+
+	window := int64(convTailStart)
+	for {
+		msgs, readAll, err := parseConversationTail(path, limit, window)
+		if err != nil {
+			return nil, err
+		}
+		// Enough to fill the view, or there is no more file to look at.
+		if readAll || len(msgs) >= want || window >= convTailMax {
+			saveConv(path, limit, msgs)
+			return msgs, nil
+		}
+		window *= 4
+	}
+}
+
+// parseConversationTail reads the last `window` bytes and reports whether that
+// covered the whole file.
+func parseConversationTail(path string, limit int, window int64) ([]Message, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer f.Close()
 
+	st, err := f.Stat()
+	if err != nil {
+		return nil, false, err
+	}
+	readAll := st.Size() <= window
+	if !readAll {
+		if _, err := f.Seek(st.Size()-window, io.SeekStart); err != nil {
+			return nil, false, err
+		}
+	}
+
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 256*1024), 32*1024*1024)
+
+	// The seek lands mid-record. That first partial line is not valid JSON and
+	// would be dropped anyway, but skipping it explicitly keeps the intent clear.
+	if !readAll {
+		sc.Scan()
+	}
 
 	var msgs []Message
 	// byToolID lets a tool_result find the tool_use it answers, which may be
@@ -208,7 +277,7 @@ func ParseConversation(path string, limit int) ([]Message, error) {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Keep the tail: a long session's early turns are not what someone opening
@@ -216,7 +285,7 @@ func ParseConversation(path string, limit int) ([]Message, error) {
 	if limit > 0 && len(msgs) > limit {
 		msgs = msgs[len(msgs)-limit:]
 	}
-	return msgs, nil
+	return msgs, readAll, nil
 }
 
 // summariseTool produces the one-line label on a collapsed tool card.
