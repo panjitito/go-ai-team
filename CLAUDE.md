@@ -1,0 +1,54 @@
+# Working on Go AI Team
+
+## Never drive the user's own browser profile
+
+Do not attach a debugger to, navigate, or automate the user's everyday Chrome
+profile. It has their personal and work Google accounts signed into it, and a
+"Claude started debugging this browser" banner across a window they are using is
+both intrusive and a real risk to accounts that are not yours to touch.
+
+The same goes for the app's own profile at `~/.goaiteam/browser`: that one is the
+product, not a fixture, and stepping through it leaves state behind.
+
+**To check the UI, run the test that owns its own browser:**
+
+```bash
+go build -o go-ai-team.exe .
+go test -tags uitest ./internal/server/ -run TestUI -v
+```
+
+`internal/server/uicheck_test.go` launches headless Chrome on a throwaway
+`t.TempDir()` profile, speaks CDP over a websocket, walks every tab and panel,
+and asserts nothing crashed and the layout has not blown out. It is behind the
+`uitest` build tag so ordinary `go test ./...` stays fast and needs no browser.
+
+If a check does not exist yet, add it there rather than reaching for a browser
+extension.
+
+## Verifying changes
+
+- `gofmt -l .` and `go vet ./...` must be clean.
+- `go test ./...` — the fast suite, no browser, no network.
+- `go test -tags uitest ./internal/server/ -run TestUI` — the UI smoke test.
+- `scratchpad/loop_api.py` and `scratchpad/loop_auto.py` (if present) exercise a
+  running server end to end, including the failure paths.
+
+Run the app against a real signed-in account before claiming a feature works.
+Several bugs in this codebase's history passed review and only showed up when
+something was actually run — a PTY closing before its output drained, a nil
+slice serialising as `null`, a credentials file that exists but holds no tokens.
+
+## House style
+
+- Comments explain *why*, especially where the obvious approach is wrong. There
+  are several of those here and each one is load-bearing.
+- Errors say what to do next, in plain language.
+- A list endpoint always returns `[]`, never `null` — see `internal/server/lists.go`.
+- Nothing is killed, deleted or uploaded without the user asking.
+- No credential is ever returned by the API, logged, or put in a prompt.
+
+## Shell gotcha
+
+Writing Go or JS source through a bash heredoc into Python mangles backslash
+escapes: `\n` and `\x1b` end up as real bytes inside string literals and break
+the file. Use the Write or Edit tools for content containing escapes.

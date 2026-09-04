@@ -336,6 +336,7 @@ internal/ai/                   headless helper prompts on your own CLI
 internal/catalog/              14 built-in roles, subagent-markdown import
 internal/automation/           scheduler and webhook engine
 internal/browser/              the app's own Chrome profile and launcher
+CLAUDE.md                      conventions for anyone (or anything) working here
 internal/gitx/                 git for the review pane
 internal/guard/                runaway-process finder
 internal/secrets/              the vault (DPAPI / AES-GCM)
@@ -349,8 +350,16 @@ internal/server/web/           the UI (no build step)
 ## Tests
 
 ```bash
-go test ./...
+go test ./...                                        # fast, no browser, no network
+go test -tags uitest ./internal/server/ -run TestUI  # UI smoke test
 ```
+
+The UI test launches **its own headless Chrome** on a throwaway temp profile and
+drives it over the DevTools protocol: it walks every tab and panel, checks
+nothing crashed, and asserts the layout has not grown wider than the window. It
+never touches a profile a person is signed into — not yours, and not the app's
+own. It is behind a build tag so the ordinary suite stays fast and needs no
+browser installed.
 
 52 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
