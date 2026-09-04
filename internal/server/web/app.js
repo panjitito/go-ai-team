@@ -28,6 +28,9 @@ const S = {
   lastTab: 'grid',
   reviewAgent: null,
   chatMode: 'chat',
+  // chatPref is what the person chose; chatMode is what the open session can
+  // actually show. A sign-in terminal must not change the preference.
+  chatPref: 'chat',
   paneTerms: [],
   speaking: false,
   ws: null,

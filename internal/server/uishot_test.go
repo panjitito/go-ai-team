@@ -4,10 +4,12 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +49,33 @@ new Promise(async resolve => {
     badge: document.querySelector('#termTokens')?.textContent }));
 })`)
 	t.Logf("chat view: %s", got)
+
+	// A pass that checked nothing is worse than no test: without a live agent
+	// this used to photograph an empty screen and report success.
+	if strings.Contains(got, "NO LIVE SESSION") || strings.Contains(got, "NO COMPOSER") {
+		t.Skipf("%s — start an agent first", got)
+	}
+	var v struct {
+		Msgs        int    `json:"msgs"`
+		Inputs      int    `json:"inputs"`
+		TermVisible bool   `json:"termVisible"`
+		Badge       string `json:"badge"`
+	}
+	if err := json.Unmarshal([]byte(got), &v); err != nil {
+		t.Fatalf("unreadable result: %v", err)
+	}
+	if v.Msgs == 0 {
+		t.Error("the conversation rendered no messages")
+	}
+	if v.Inputs != 1 {
+		t.Errorf("found %d inputs in chat mode, want exactly 1", v.Inputs)
+	}
+	if v.TermVisible {
+		t.Error("the terminal is visible in chat mode, which is the stacked-input problem")
+	}
+	if v.Badge == "" || v.Badge == "—" {
+		t.Errorf("token badge reads %q; it should carry the session's figures", v.Badge)
+	}
 
 	res := c.call(t, "Page.captureScreenshot", map[string]any{"format": "png"})
 	data, _ := res["data"].(string)

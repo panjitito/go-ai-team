@@ -26,6 +26,13 @@ const CHAT = {
   atBottom: true,
 };
 
+// conversational reports whether a session has a transcript to render. Only a
+// real agent does; a sign-in PTY and a dev command are terminals and nothing
+// else.
+function conversational(sess) {
+  return sess && sess.kind === 'agent';
+}
+
 // openAgent replaces the old terminal-first view: chat by default, terminal on
 // demand, one composer for both.
 function openAgent(sessionId, mode) {
@@ -35,7 +42,18 @@ function openAgent(sessionId, mode) {
   if (S.view !== 'term') S.lastTab = S.view;
   S.openSession = sessionId;
   S.view = 'term';
-  S.chatMode = mode || S.chatMode || 'chat';
+
+  // The conversation view is rendered from the transcript the CLI writes, and
+  // only a Claude agent has one. A sign-in and a dev command do not, so opening
+  // them in chat showed an empty pane with the terminal hidden behind it — and
+  // signing in is done *in* that terminal. "Type /login and press Enter" then
+  // appeared to do nothing, because the thing being typed into was not on
+  // screen. Those open on the terminal, which is their real interface.
+  //
+  // The chosen mode is remembered separately from the effective one, so being
+  // forced to the terminal here does not silently change what agents open in.
+  if (mode) S.chatPref = mode;
+  S.chatMode = conversational(sess) ? (S.chatPref || 'chat') : 'term';
 
   stopChatPoll();
   closeTermSocket();
@@ -72,6 +90,15 @@ function applyChatMode(sessionId) {
   const chat = S.chatMode === 'chat';
   $('#chatBody').style.display = chat ? '' : 'none';
   $('#termHost').style.display = chat ? 'none' : '';
+
+  // Exactly one input, in both modes. The terminal has its own prompt, so
+  // leaving the composer on screen next to it is the stacked-input problem
+  // again — and worse than cosmetic here: the composer delivers text as a
+  // bracketed paste, which is not how you answer a TUI prompt or type a slash
+  // command. In terminal mode you type in the terminal.
+  const comp = document.querySelector('.composer-wrap');
+  if (comp) comp.style.display = chat ? '' : 'none';
+
   for (const b of document.querySelectorAll('[data-mode]')) {
     b.classList.toggle('primary', b.getAttribute('data-mode') === S.chatMode);
   }
@@ -105,9 +132,9 @@ function chatHeader(sess, title) {
       onclick: () => openUsage(sessionId),
     }, '—'),
 
-    el('div', { class: 'seg' },
-      el('button', { class: 'btn sm', 'data-mode': 'chat', onclick: () => { S.chatMode = 'chat'; applyChatMode(sessionId); } }, 'Chat'),
-      el('button', { class: 'btn sm', 'data-mode': 'term', onclick: () => { S.chatMode = 'term'; applyChatMode(sessionId); } }, 'Terminal')),
+    conversational(sess) ? el('div', { class: 'seg' },
+      el('button', { class: 'btn sm', 'data-mode': 'chat', onclick: () => { S.chatPref = 'chat'; S.chatMode = 'chat'; applyChatMode(sessionId); } }, 'Chat'),
+      el('button', { class: 'btn sm', 'data-mode': 'term', onclick: () => { S.chatPref = 'term'; S.chatMode = 'term'; applyChatMode(sessionId); } }, 'Terminal')) : null,
 
     el('button', { class: 'btn ghost sm', id: 'hushBtn', style: 'display:none', title: 'Stop speaking', onclick: () => Voice.hush() }, '⏹'),
     el('button', { class: 'btn ghost sm', title: 'Read the last answer aloud (Shift for a condensed read)', onclick: e => readAloud(sessionId, e.shiftKey) }, '🔊'),
