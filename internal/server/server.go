@@ -133,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/input", s.sendInput)
 	mux.HandleFunc("GET /api/sessions/{id}/usage", s.sessionUsage)
 	mux.HandleFunc("GET /api/sessions/{id}/scrollback", s.sessionScrollback)
+	mux.HandleFunc("GET /api/sessions/{id}/conversation", s.conversation)
 
 	// --- settings, misc ---
 	mux.HandleFunc("GET /api/settings", s.getSettings)
@@ -777,11 +778,18 @@ func (s *Server) sendInput(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	data := req.Data
+	// A prompt (Enter set) goes through the readiness path, because a message
+	// typed while the CLI is still drawing its banner is silently dropped — the
+	// terminal simply is not listening yet, and the bytes vanish with no error.
+	// Raw keystrokes from the terminal view go straight through: somebody typing
+	// into a live terminal can see whether it is listening.
+	var err error
 	if req.Enter {
-		data += "\r"
+		err = s.sm.SendPrompt(r.PathValue("id"), req.Data)
+	} else {
+		err = s.sm.SendKeys(r.PathValue("id"), req.Data)
 	}
-	if err := s.sm.Write(r.PathValue("id"), []byte(data)); err != nil {
+	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}

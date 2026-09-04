@@ -184,36 +184,14 @@ func (m *Manager) LaunchTask(projectID, agentID, prompt, origin string) (string,
 	return sess.ID, nil
 }
 
-// deliver waits for the CLI to be ready, then types the prompt.
-//
-// The wait is unavoidable: a CLI that has not finished drawing its prompt drops
-// input typed at it. Waiting for the process to go quiet is more reliable than
-// a fixed sleep, because a cold start and a warm start differ by seconds.
+// deliver sends an automation prompt once the CLI is listening. The readiness
+// wait lives in SendPrompt so the composer and automation share one answer to
+// "is it safe to type yet".
 func (m *Manager) deliver(sessionID, prompt string) {
 	if strings.TrimSpace(prompt) == "" {
 		return
 	}
-	deadline := time.Now().Add(60 * time.Second)
-	for time.Now().Before(deadline) {
-		time.Sleep(1500 * time.Millisecond)
-		s, ok := m.Get(sessionID)
-		if !ok {
-			return
-		}
-		s.mu.Lock()
-		quiet := !s.lastOut.IsZero() && time.Since(s.lastOut) > 1200*time.Millisecond
-		gone := s.terminal()
-		s.mu.Unlock()
-		if gone {
-			return
-		}
-		if quiet {
-			break
-		}
-	}
-	// A carriage return is what submits in these TUIs; a newline is treated as
-	// a line break inside the composer.
-	_ = m.Write(sessionID, []byte(prompt+"\r"))
+	_ = m.SendPrompt(sessionID, prompt)
 }
 
 // Notify implements the automation Notifier so schedules and webhooks report

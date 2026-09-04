@@ -144,3 +144,63 @@ func TestRingBuffer(t *testing.T) {
 		t.Errorf("got %q, want 56789ABCDE", got)
 	}
 }
+
+// The false positives that actually happened.
+//
+// These are not hypothetical. Every line here appeared on a real terminal and
+// tripped the detector, benching a healthy account. The words arrive from
+// content the agent was displaying — a message, a file, documentation — and no
+// amount of wording cleverness makes that safe on its own, which is why the
+// caller also confirms the session really stopped before acting.
+func TestDetectLimit_ContentOnScreenIsNotALimit(t *testing.T) {
+	cases := []string{
+		// The one that bit: prose about the detector, quoted.
+		`picker works - but no real "usage limit reached" has ever occurred during testing.`,
+		`The detector only fires on a provider message that says the limit has been reached.`,
+		`- **Auto-switch has never hit a real quota limit.** The detector's true/false positives are tested.`,
+		"regexp.MustCompile(`(?i)usage limit reached`),",
+		`| Auto-switch | At a usage limit: bench the account, copy the transcript |`,
+		`git commit -m "fix: handle usage limit reached properly"`,
+		`README says 'rate limit exceeded' should be handled`,
+		// Long prose containing the phrase unquoted is still prose.
+		`When a provider stops the CLI because the account is out of quota the app needs to notice that and hand the conversation somewhere else without losing anything at all`,
+	}
+	for _, c := range cases {
+		if hit := DetectLimit(c); hit.Matched {
+			t.Errorf("false positive on content:\n  %q\n  matched: %q", c, hit.Line)
+		}
+	}
+}
+
+// The real thing must still be caught. A CLI notice is short and unquoted.
+func TestDetectLimit_StillCatchesTheRealThing(t *testing.T) {
+	cases := []string{
+		"Claude usage limit reached. Your limit will reset at 3pm.",
+		"5-hour limit reached",
+		"rate limit exceeded",
+		"You have reached your limit for this window",
+		"\x1b[31mClaude usage limit reached\x1b[0m",
+	}
+	for _, c := range cases {
+		if hit := DetectLimit(c); !hit.Matched {
+			t.Errorf("missed a real limit message: %q", c)
+		}
+	}
+}
+
+// Only the tail is scanned: a phrase far back in the scrollback was displayed,
+// not just announced.
+func TestDetectLimit_OnlyScansTheTail(t *testing.T) {
+	old := "Claude usage limit reached\n"
+	padding := ""
+	for i := 0; i < 200; i++ {
+		padding += "the agent kept working after that line appeared on screen\n"
+	}
+	if hit := DetectLimit(old + padding); hit.Matched {
+		t.Error("a limit message buried far back in the scrollback should not fire")
+	}
+	// The same phrase at the end still fires.
+	if hit := DetectLimit(padding + old); !hit.Matched {
+		t.Error("a limit message at the tail should fire")
+	}
+}

@@ -21,6 +21,15 @@ import (
 
 // handleLimit runs the whole switch, from bench to resume.
 func (m *Manager) handleLimit(s *Session, hit LimitHit) {
+	// A pattern match is only a suspicion. The terminal shows whatever the agent
+	// is displaying, so the words can arrive from a file, a web page or a
+	// conversation — that is not hypothetical, it benched a healthy account
+	// during testing. Watch the session first: a real limit stops it dead, while
+	// content that merely mentions one is followed by the agent carrying on.
+	if !m.confirmLimit(s) {
+		return
+	}
+
 	s.mu.Lock()
 	accountID := s.AccountID
 	accountName := s.AccountName

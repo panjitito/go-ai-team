@@ -573,7 +573,7 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 	// waits in the inbox and arrives when the agent next checks.
 	if sess, ok := s.sm.SessionForAgent(m.ToID); ok {
 		body := fmt.Sprintf("Message from %s — %s\n\n%s", m.FromName, m.Subject, m.Body)
-		if err := s.sm.Write(sess.ID, []byte(body+"\r")); err == nil {
+		if err := s.sm.SendPrompt(sess.ID, body); err == nil {
 			_, _ = s.st.UpdateMessage(m.ID, func(x *store.AgentMessage) {
 				x.State = "delivered"
 				x.Delivered = time.Now()
@@ -819,7 +819,7 @@ func (s *Server) morphAgent(w http.ResponseWriter, r *http.Request) {
 	b.WriteString("Keep everything you have learned so far in this session. " +
 		"Acknowledge the new role in one line, then continue.")
 
-	if err := s.sm.Write(sess.ID, []byte(b.String()+"\r")); err != nil {
+	if err := s.sm.SendPrompt(sess.ID, b.String()); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}

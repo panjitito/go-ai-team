@@ -489,7 +489,7 @@ func (s *Server) sendPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := mcp.ResolveChain(s.st, p.Body, 0)
-	if err := s.sm.Write(req.SessionID, []byte(body+"\r")); err != nil {
+	if err := s.sm.SendPrompt(req.SessionID, body); err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}

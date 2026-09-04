@@ -39,6 +39,9 @@ const (
 
 const scrollbackBytes = 256 * 1024
 
+// errNotFound mirrors the store's error so callers can treat both the same way.
+var errNotFound = store.ErrNotFound
+
 // Kind separates real agent work from the throwaway PTY used to sign an
 // account in, so a login terminal never appears as an agent on the dashboard.
 type Kind string
@@ -110,6 +113,9 @@ type Session struct {
 	// lastTokenMove is when the transcript last grew. Together with lastOut it
 	// separates "thinking" from "waiting on you".
 	lastTokenMove time.Time
+	// inputReady is set once the CLI has been seen to settle, after which
+	// prompts are written without waiting.
+	inputReady bool
 }
 
 // Manager owns every live session.
@@ -586,7 +592,6 @@ func (m *Manager) refresh(s *Session) {
 	s.mu.Lock()
 	pid, dir, cwd, provider := s.PID, s.AccountDir, s.CWD, s.Provider
 	sid := s.ClaudeSessionID
-	startedAt := s.StartedAt
 	s.mu.Unlock()
 
 	// The status heuristic must run for every session, including one that has
@@ -645,15 +650,20 @@ func (m *Manager) refresh(s *Session) {
 	}
 	if !ok {
 		// Before a session id exists, fall back to the newest transcript in this
-		// working directory — but only one written since this process started.
-		// Without that guard a fresh agent in a directory with history would
-		// inherit an older session's totals and show millions of tokens for work
-		// it never did.
-		if p, mod, found := claudefs.LatestTranscript(dir, cwd); found && mod.After(startedAt) {
-			if st, err := claudefs.ParseTranscript(p); err == nil {
-				stats, ok = st, true
-			}
-		}
+		// Deliberately no fallback.
+		//
+		// This used to guess at the newest transcript for the working directory,
+		// guarded only by "modified since we started". That guard is useless
+		// against a transcript that is being written right now by somebody else:
+		// running an agent in a directory where another Claude session was
+		// already live attributed that session's entire history to the new
+		// agent — a fresh agent reported 332 million tokens and a 99% cache rate
+		// it had done nothing to earn.
+		//
+		// Before the CLI writes its own session id there is genuinely nothing to
+		// attribute, and zero is the honest answer. Somebody else's numbers are
+		// worse than none.
+		return
 	}
 	if !ok {
 		return

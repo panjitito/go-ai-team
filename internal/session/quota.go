@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Quota-limit detection.
@@ -67,10 +68,32 @@ type LimitHit struct {
 const DefaultBench = 1 * time.Hour
 
 // DetectLimit scans recent terminal output for a genuine usage-limit message.
+//
+// What comes back is a suspicion, not a verdict. The caller confirms it by
+// watching whether the session actually stopped — see confirmLimit — because a
+// terminal also shows file contents, fetched pages and conversation text, any of
+// which can carry these words entirely innocently. During testing this really
+// did bench a healthy account, on a line of prose discussing rate limits.
 func DetectLimit(chunk string) LimitHit {
+	// Only the tail matters. A limit notice is the last thing a CLI says, so
+	// scanning far back mostly finds the phrase inside content it displayed.
+	if len(chunk) > 1200 {
+		chunk = chunk[len(chunk)-1200:]
+	}
 	for _, raw := range strings.Split(chunk, "\n") {
 		line := strings.TrimSpace(stripANSI(raw))
-		if line == "" || len(line) > 600 {
+		// A CLI notice is short — the longest real one seen is under 60
+		// characters. A long line is prose, and prose about rate limits is
+		// exactly the false positive to avoid.
+		//
+		// This is noise reduction, not a guarantee: a short enough sentence will
+		// still slip through, and nothing in the wording can prevent that. What
+		// makes acting on a match safe is the confirmation step, which checks
+		// whether the session actually stopped.
+		if line == "" || len(line) > 120 {
+			continue
+		}
+		if looksQuoted(line) {
 			continue
 		}
 		skip := false
@@ -161,3 +184,32 @@ var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\r`)
 
 // stripANSI removes escape sequences so pattern matching sees plain text.
 func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
+
+// looksQuoted reports whether a line is talking about a limit rather than
+// announcing one.
+//
+// Quotation marks are the tell. Prose that mentions a limit nearly always quotes
+// the phrase, cites a filename, or wraps it in code formatting; a CLI announcing
+// its own limit has no reason to quote itself.
+//
+// Apostrophes are the exception, and an important one: "You've hit your usage
+// limit." is a real notice from a real CLI. A contraction is not a quotation, so
+// an apostrophe with a letter on both sides is ignored and only a free-standing
+// one counts.
+func looksQuoted(line string) bool {
+	if strings.ContainsAny(line, "\"`“”‘’") {
+		return true
+	}
+	r := []rune(line)
+	for i, c := range r {
+		if c != '\'' {
+			continue
+		}
+		inWord := i > 0 && unicode.IsLetter(r[i-1]) &&
+			i+1 < len(r) && unicode.IsLetter(r[i+1])
+		if !inWord {
+			return true
+		}
+	}
+	return false
+}

@@ -27,6 +27,7 @@ const S = {
   view: 'grid',
   lastTab: 'grid',
   reviewAgent: null,
+  chatMode: 'chat',
   paneTerms: [],
   speaking: false,
   ws: null,
@@ -410,195 +411,13 @@ function agentCard(a) {
 
 // ---------------------------------------------------------------- terminal
 
-function openTerm(sessionId) {
-  const sess = sessionById(sessionId);
-  if (!sess) return;
-  disposePanes();
-  if (S.view !== 'term') S.lastTab = S.view;
-  S.openSession = sessionId;
-  S.view = 'term';
+// The conversation view lives in chat.js. openTerm is kept as the name every
+// caller already uses; it hands off to the chat-first view, which owns the
+// terminal as one of its two modes. That is what removed the two stacked input
+// boxes: the CLI's own prompt is only on screen in terminal mode.
+function openTerm(sessionId) { openAgent(sessionId); }
 
-  const main = $('#main');
-  main.innerHTML = '';
-
-  const acctPill = el('span', { class: 'pill', title: sess.accountDir || '' },
-    el('span', { class: 'acct-dot', style: `background:${sess.accountColor || '#3a4250'}` }),
-    sess.accountName || 'system default');
-
-  const tokenBadge = el('span', {
-    class: 'token-badge', id: 'termTokens',
-    onclick: () => openUsage(sessionId),
-  }, '—');
-
-  const head = el('div', { class: 'term-head' },
-    el('button', {
-      class: 'btn ghost sm',
-      onclick: () => { closeTerm(); S.view = S.lastTab || 'grid'; render(); },
-    }, '← Back'),
-    el('strong', { text: sess.agentId ? (agentById(sess.agentId)?.name || 'Agent') : 'Sign in' }),
-    el('span', { class: 'pill', id: 'termStatus' },
-      el('span', { class: 'dot ' + sess.status }), sess.status),
-    acctPill,
-    el('span', { class: 'spacer' }),
-    tokenBadge,
-    el('button', {
-      class: 'btn ghost sm', id: 'hushBtn', style: 'display:none',
-      title: 'Stop speaking', onclick: () => Voice.hush(),
-    }, '⏹'),
-    el('button', {
-      class: 'btn ghost sm', title: 'Read the recent output aloud (hold Shift for a condensed read)',
-      onclick: e => readAloud(sessionId, e.shiftKey),
-    }, '🔊'),
-    sess.agentId ? el('button', {
-      class: 'btn ghost sm', title: 'Change this agent’s role, keeping the conversation',
-      onclick: () => morphAgent(sess),
-    }, '⟳ Morph') : null,
-    sess.agentId ? el('button', {
-      class: 'btn ghost sm', title: 'Fork a twin that already has this conversation',
-      onclick: () => forkAgent(sess),
-    }, '⑃ Fork') : null,
-    el('button', { class: 'btn ghost sm', title: 'Restart on another account now',
-      onclick: () => manualSwitch(sess) }, '↻ Switch'),
-    el('button', { class: 'btn danger sm', onclick: () => stopSession(sessionId) }, 'Stop'));
-
-  const host = el('div', { class: 'term-host', id: 'termHost' });
-
-  const box = el('textarea', {
-    id: 'composerBox', rows: '1', placeholder: 'Type a prompt, Enter to send (Shift+Enter for a newline)',
-  });
-  box.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendComposer(sessionId); }
-  });
-  box.addEventListener('input', () => {
-    box.style.height = 'auto';
-    box.style.height = Math.min(box.scrollHeight, 130) + 'px';
-  });
-  const composer = el('div', { class: 'composer' },
-    el('div', { style: 'display:flex;flex-direction:column;gap:4px' },
-      el('button', { class: 'btn ghost sm', title: 'Prompt library', onclick: openPrompts }, '📋'),
-      el('button', {
-        class: 'btn ghost sm', id: 'voiceBtn', title: 'Dictate',
-        onclick: () => Voice.dictate((text, done) => {
-          const b = $('#composerBox');
-          if (!b) return;
-          b.value = text;
-          b.dispatchEvent(new Event('input'));
-          if (done) b.focus();
-        }),
-      }, '🎤')),
-    box,
-    el('div', { style: 'display:flex;flex-direction:column;gap:4px' },
-      el('button', {
-        class: 'btn sm', title: 'Right-size the model for what you typed, before you send it',
-        onclick: () => adaptiveCheck(sessionId),
-      }, '⚖'),
-      el('button', { class: 'btn primary', onclick: () => sendComposer(sessionId) }, 'Send')));
-
-  main.append(el('div', { class: 'term-wrap' }, head, host, composer));
-
-  // xterm setup
-  S.term = new Terminal({
-    cursorBlink: true,
-    fontFamily: 'ui-monospace, "Cascadia Code", Consolas, monospace',
-    fontSize: 12.5,
-    scrollback: 8000,
-    allowProposedApi: true,
-    theme: {
-      background: '#07090b', foreground: '#e6e9ef', cursor: '#ff8a3d',
-      black: '#11141a', red: '#ef4444', green: '#22c55e', yellow: '#f59e0b',
-      blue: '#3b82f6', magenta: '#a855f7', cyan: '#06b6d4', white: '#e6e9ef',
-      brightBlack: '#626c7a', brightRed: '#f87171', brightGreen: '#4ade80',
-      brightYellow: '#fbbf24', brightBlue: '#60a5fa', brightMagenta: '#c084fc',
-      brightCyan: '#22d3ee', brightWhite: '#ffffff',
-    },
-  });
-  S.fit = new FitAddon.FitAddon();
-  S.term.loadAddon(S.fit);
-  S.term.open(host);
-  try { S.fit.fit(); } catch {}
-
-  // Terminal keystrokes go straight down the socket as raw bytes, so what the
-  // CLI sees is exactly what a local terminal would send.
-  const enc = new TextEncoder();
-  S.term.onData(d => {
-    if (S.termSocket && S.termSocket.readyState === 1) S.termSocket.send(enc.encode(d));
-  });
-
-  connectTermSocket(sessionId);
-
-  const ro = new ResizeObserver(() => {
-    try {
-      S.fit.fit();
-      if (S.termSocket && S.termSocket.readyState === 1) {
-        S.termSocket.send(JSON.stringify({ type: 'resize', cols: S.term.cols, rows: S.term.rows }));
-      }
-    } catch {}
-  });
-  ro.observe(host);
-  S.termRO = ro;
-  updateTermTokens();
-}
-
-function connectTermSocket(sessionId) {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const cols = S.term ? S.term.cols : 120, rows = S.term ? S.term.rows : 32;
-  const ws = new WebSocket(`${proto}://${location.host}/ws/pty?session=${encodeURIComponent(sessionId)}&cols=${cols}&rows=${rows}`);
-  ws.binaryType = 'arraybuffer';
-  S.termSocket = ws;
-
-  const dec = new TextDecoder();
-  ws.onmessage = ev => {
-    if (typeof ev.data === 'string') {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === 'session') patchSession(msg.session);
-      } catch {}
-      return;
-    }
-    S.term.write(dec.decode(new Uint8Array(ev.data)));
-  };
-  ws.onclose = () => {
-    if (S.openSession === sessionId && S.view === 'term') {
-      S.term.write('\r\n\x1b[38;5;244m[terminal disconnected]\x1b[0m\r\n');
-    }
-  };
-  ws.onerror = () => toast('Terminal socket error', 'bad');
-}
-
-function closeTerm() {
-  if (S.termSocket) { try { S.termSocket.close(); } catch {} S.termSocket = null; }
-  if (S.termRO) { try { S.termRO.disconnect(); } catch {} S.termRO = null; }
-  if (S.term) { try { S.term.dispose(); } catch {} S.term = null; }
-  S.openSession = null;
-}
-
-async function sendComposer(sessionId) {
-  const box = $('#composerBox');
-  if (!box) return;
-  const text = box.value;
-  if (!text.trim()) return;
-  box.value = '';
-  box.style.height = 'auto';
-  try {
-    await api(`/sessions/${sessionId}/input`, { method: 'POST', body: { data: text, enter: true } });
-  } catch (e) {
-    toast(e.message, 'bad');
-    box.value = text;
-  }
-}
-
-function updateTermTokens() {
-  const badge = $('#termTokens');
-  if (!badge || !S.openSession) return;
-  const s = sessionById(S.openSession);
-  if (!s) return;
-  badge.textContent = s.totalTokens
-    ? `${fmtNum(s.totalTokens)} tok · ${(s.cacheHitRate || 0).toFixed(0)}% cache`
-    : 'no tokens yet';
-  badge.className = 'token-badge' + (s.totalTokens > 2e6 ? ' hot' : '');
-  const st = $('#termStatus');
-  if (st) st.innerHTML = `<span class="dot ${s.status}"></span> ${s.status}`;
-}
+function closeTerm() { leaveAgent(); }
 
 // ---------------------------------------------------------------- actions
 
