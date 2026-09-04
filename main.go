@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -30,6 +31,7 @@ import (
 	"github.com/uniair/go-ai-team/internal/accounts"
 	"github.com/uniair/go-ai-team/internal/ai"
 	"github.com/uniair/go-ai-team/internal/automation"
+	"github.com/uniair/go-ai-team/internal/browser"
 	"github.com/uniair/go-ai-team/internal/catalog"
 	"github.com/uniair/go-ai-team/internal/claudefs"
 	"github.com/uniair/go-ai-team/internal/dbx"
@@ -55,21 +57,55 @@ func main() {
 	}
 
 	var (
-		port    = flag.Int("port", 0, "port to listen on (default: saved setting, else 7777)")
-		host    = flag.String("host", "127.0.0.1", "address to bind; use 0.0.0.0 to reach it from your phone")
-		open    = flag.Bool("open", true, "open the UI in your browser on start")
+		port   = flag.Int("port", 0, "port to listen on (default: saved setting, else 7777)")
+		host   = flag.String("host", "127.0.0.1", "address to bind; use 0.0.0.0 to reach it from your phone")
+		open   = flag.Bool("open", true, "open the UI on start")
+		browse = flag.String("browser", "app",
+			"how to open it: app (own window, own Chrome profile), tab, system (your normal browser), none")
+		profile = flag.String("browser-profile", "",
+			"where the app's Chrome profile lives (default: <state>/browser)")
+		shortcut = flag.Bool("install-shortcut", false,
+			"create a desktop launcher for the app, then exit")
 		showVer = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Parse()
+
+	mode, err := browser.ParseMode(*browse)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !*open {
+		mode = browser.ModeNone
+	}
 
 	if *showVer {
 		fmt.Printf("go-ai-team %s (%s/%s, %s)\n", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return
 	}
 
+	// Creating a desktop launcher writes outside our own state directory, so it
+	// only ever happens when explicitly asked for.
+	if *shortcut {
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatalf("cannot locate this executable: %v", err)
+		}
+		sc, err := browser.InstallShortcut(exe, *port)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Created %s\n  %s\n", sc.Path, sc.Note)
+		return
+	}
+
 	app, err := build(*host)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	profileDir := *profile
+	if profileDir == "" {
+		profileDir = filepath.Join(app.st.RootDir(), "browser")
 	}
 
 	listenPort := app.settings.Port
@@ -104,8 +140,22 @@ func main() {
 	localURL := fmt.Sprintf("http://localhost:%d", listenPort)
 	printBanner(listenPort, localURL, app.token, app.loopback, app.st.RootDir(), app.vault != nil)
 
-	if *open {
-		go openBrowser(localURL)
+	if mode != browser.ModeNone {
+		go func() {
+			// A moment for the listener to be serving, so the first request is
+			// not a connection refused that the user sees as a blank window.
+			time.Sleep(250 * time.Millisecond)
+			what, err := browser.Open(browser.Opts{
+				URL: localURL, ProfileDir: profileDir, Mode: mode,
+			})
+			if err != nil {
+				log.Printf("could not open a browser (%v); visit %s", err, localURL)
+				return
+			}
+			if what != "" {
+				fmt.Printf("  %s\n", what)
+			}
+		}()
 	}
 
 	go func() {
@@ -285,21 +335,4 @@ func printBanner(port int, localURL, token string, loopback bool, home string, v
 		fmt.Printf("  \x1b[33mVault     disabled: no encryption provider on this machine\x1b[0m\n")
 	}
 	fmt.Printf("  %s\n  Ctrl-C to stop.\n\n", line)
-}
-
-// openBrowser launches the default browser without blocking startup.
-func openBrowser(url string) {
-	time.Sleep(300 * time.Millisecond)
-	var err error
-	switch runtime.GOOS {
-	case "windows":
-		err = runDetached("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		err = runDetached("open", url)
-	default:
-		err = runDetached("xdg-open", url)
-	}
-	if err != nil {
-		log.Printf("could not open a browser automatically; visit %s", url)
-	}
 }

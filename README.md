@@ -117,7 +117,48 @@ go build -o go-ai-team.exe .     # or: go build -o go-ai-team .
 ./go-ai-team.exe
 ```
 
-The UI opens at <http://localhost:7777>.
+It opens in **its own Chrome profile**, as an app window — no address bar, no
+bookmark bar, its own taskbar entry, and none of your normal extensions,
+cookies or history. See below.
+
+### Its own browser profile
+
+The whole bet of this project is that a browser is a better shell than Electron.
+That only holds if the window behaves like an application, so on start it opens
+a dedicated Chrome profile living at `~/.goaiteam/browser`:
+
+```
+--browser app       own window, own profile   (default)
+--browser tab       ordinary tab, own profile
+--browser system    your normal browser and profile
+--browser none      open nothing
+--browser-profile   put the profile somewhere else
+```
+
+Chrome, Edge, Brave, Vivaldi and Chromium are all driven the same way; whichever
+is found first is used, and if none is present it falls back to your default
+browser and says so.
+
+The profile is a real, separate Chrome profile — you can sign into a different
+Google account in it, install different extensions, and none of it touches your
+browsing. Deleting the folder is safe; it is recreated on the next launch. A
+`README.txt` inside says the same thing, because an unexplained 100 MB directory
+in a dotfolder is exactly what gets deleted in confusion later.
+
+Preferences are seeded before Chrome starts. The one that earns its keep is
+`exit_type: Normal`: without it, Chrome shows the "didn't shut down correctly /
+Restore pages?" bubble every single time, because quitting the server closes the
+window in a way Chrome reads as a crash.
+
+For a launcher you can double-click, opt in explicitly:
+
+```bash
+./go-ai-team.exe --install-shortcut
+```
+
+That writes `Go AI Team.lnk` to your desktop (a `.command` on macOS, a
+`.desktop` entry on Linux). It is behind a flag rather than automatic, because
+writing to somebody's desktop uninvited is not something a tool should decide.
 
 ### From your phone
 
@@ -294,6 +335,7 @@ internal/session/              PTY manager, status, limit detector, auto-switch
 internal/ai/                   headless helper prompts on your own CLI
 internal/catalog/              14 built-in roles, subagent-markdown import
 internal/automation/           scheduler and webhook engine
+internal/browser/              the app's own Chrome profile and launcher
 internal/gitx/                 git for the review pane
 internal/guard/                runaway-process finder
 internal/secrets/              the vault (DPAPI / AES-GCM)
@@ -317,7 +359,7 @@ detector's true and false positives, environment filtering, credential auth
 states, schedule arithmetic including short months, webhook signatures and
 gating, SQL write/stacked-statement classification, vault round-trips including
 "the value is not readable on disk", the MCP protocol and its project scope,
-JSON salvage, and the list-endpoint contract.
+JSON salvage, the list-endpoint contract, and the browser profile's preference seeding.
 
 Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
 checks including the failure cases, and an end-to-end automation run that fires
