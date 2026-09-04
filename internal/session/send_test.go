@@ -1,6 +1,9 @@
 package session
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Three real terminal captures, one for each thing that happens to a prompt.
 
@@ -46,7 +49,7 @@ func TestDeliveryState(t *testing.T) {
 		want delivery
 	}{
 		{"typed but unsent", stuckTail, prompt, deliveryTyped},
-		{"never arrived", missingTail, prompt, deliveryMissing},
+		{"never arrived, composer idle", missingTail, prompt, deliveryIdle},
 		{"taken by the CLI", sentTail, prompt, deliverySent},
 		// The composer wraps and re-indents what it holds, so whitespace in the
 		// capture must not decide the answer.
@@ -73,6 +76,19 @@ func TestDeliveryState(t *testing.T) {
 func TestDeliveryMissingIsNotSent(t *testing.T) {
 	if deliveryState(missingTail, prompt) == deliverySent {
 		t.Fatal("a prompt that never arrived was reported as sent; the message would be silently lost")
+	}
+}
+
+// Retyping is only safe on positive evidence that nothing was typed. "I cannot
+// see it" is not that evidence — a busy TUI scrolls a sent message out of the
+// window in under a second, and retyping then sends it twice.
+func TestDeliveryMissingIsNotIdle(t *testing.T) {
+	busy := "output\r\n" + strings.Repeat("thinking… redrawing the status line\r\n", 40)
+	if got := deliveryState(busy, prompt); got == deliveryIdle {
+		t.Error("a busy terminal with no placeholder must not be treated as idle")
+	}
+	if got := deliveryState(missingTail, prompt); got != deliveryIdle {
+		t.Errorf("the composer placeholder should read as idle, got %v", got)
 	}
 }
 

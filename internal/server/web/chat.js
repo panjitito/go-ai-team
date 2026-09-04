@@ -275,9 +275,49 @@ function messageEl(m, openSet) {
   const bodyEl = el('div', { class: 'msg-body' });
   for (const b of m.blocks) {
     if (b.kind === 'text') bodyEl.append(MD.render(b.text));
+    else if (b.kind === 'image') bodyEl.append(imageEl(b));
     else if (b.tool) bodyEl.append(toolEl(b.tool, openSet));
   }
   return el('div', { class: 'msg ' + (isUser ? 'user' : 'assistant') }, head, bodyEl);
+}
+
+// imageEl renders a pasted image inside a message.
+//
+// Sending a screenshot puts its path into the prompt, because that is how the
+// CLI is handed a picture. Showing the message back as that path meant you sent
+// an image and got a filename — no way to tell at a glance which screenshot went,
+// or whether the right one did. The picture is shown instead, named, and
+// clicking it opens it full size.
+function imageEl(b) {
+  const img = el('img', {
+    class: 'msg-img', src: b.url, alt: b.name || 'pasted image', loading: 'lazy',
+  });
+  img.addEventListener('click', () => lightbox(b.url, b.name));
+  const fig = el('figure', { class: 'msg-fig' }, img);
+  if (b.name) fig.append(el('figcaption', { text: b.name }));
+  // A file that has since been cleaned up should say so, rather than leave a
+  // broken-image icon with no explanation.
+  img.addEventListener('error', () => {
+    fig.replaceChildren(el('div', { class: 'msg-img-gone' },
+      (b.name || 'image') + ' — the file is no longer on disk'));
+  });
+  return fig;
+}
+
+// lightbox shows one image full size over the app, dismissed by clicking it or
+// pressing Escape.
+function lightbox(url, name) {
+  const box = el('div', { class: 'lightbox' },
+    el('img', { class: 'lightbox-img', src: url, alt: name || '' }),
+    name ? el('div', { class: 'lightbox-name', text: name }) : null);
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  function close() {
+    box.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  box.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.append(box);
 }
 
 function shortModel(m) {

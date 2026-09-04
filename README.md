@@ -1,4 +1,4 @@
-# Go AI Team
+| **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and see it as a picture in the conversation afterwards rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |# Go AI Team
 
 An open cockpit for Claude Code and friends: run every account you own side by
 side, drive a board, schedule and trigger agents, review what they wrote, and
@@ -402,7 +402,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-86 tests. Covered: the cwd encoder against real transcript directories, the
+92 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth

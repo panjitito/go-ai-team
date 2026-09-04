@@ -30,6 +30,10 @@ type BlockKind string
 const (
 	BlockText BlockKind = "text"
 	BlockTool BlockKind = "tool"
+	// BlockImage is a picture to show inline. Produced by the server for a
+	// pasted image, so a message that was "look at this screenshot" reads as the
+	// screenshot rather than as an absolute path to it.
+	BlockImage BlockKind = "image"
 )
 
 // Block is one ordered piece of a message.
@@ -37,6 +41,10 @@ type Block struct {
 	Kind BlockKind `json:"kind"`
 	Text string    `json:"text,omitempty"`
 	Tool *ToolCall `json:"tool,omitempty"`
+	// URL is where an image block can be fetched from, and Name is what to call
+	// it. Only set on BlockImage.
+	URL  string `json:"url,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // ToolCall is one tool invocation and its result.

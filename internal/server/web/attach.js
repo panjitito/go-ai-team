@@ -59,7 +59,12 @@ function renderAttachments() {
   strip.style.display = '';
 
   ATT.pending.forEach((a, i) => {
-    const img = el('img', { class: 'attach-thumb', src: a.url, alt: a.name });
+    // Clickable, because a 60px square is enough to tell two screenshots apart
+    // but not enough to check you grabbed the right region before sending.
+    const img = el('img', {
+      class: 'attach-thumb', src: a.url, alt: a.name, title: 'Click to see it full size',
+    });
+    img.addEventListener('click', () => lightbox(a.url, a.name));
     const label = a.status === 'uploading' ? 'sending…'
       : a.status === 'failed' ? (a.error || 'failed')
         : fmtBytes(a.size || 0);

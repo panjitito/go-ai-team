@@ -123,7 +123,12 @@ func loadConv(path string, limit int) ([]Message, bool) {
 	if !ok || e.limit != limit || e.size != st.Size() || e.mod != st.ModTime().UnixNano() {
 		return nil, false
 	}
-	return e.msgs, true
+	// A copy of the outer slice, not the slice itself. Callers rewrite messages
+	// on their way to the UI — the server turns a pasted path into an image
+	// block — and doing that to the cached slice would corrupt it for everyone
+	// else, concurrently. Copying message structs is cheap: the strings and the
+	// block slices inside are shared and never written through.
+	return append([]Message(nil), e.msgs...), true
 }
 
 func saveConv(path string, limit int, msgs []Message) {

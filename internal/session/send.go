@@ -2,9 +2,14 @@ package session
 
 import (
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/uniair/go-ai-team/internal/claudefs"
+	"github.com/uniair/go-ai-team/internal/store"
 )
 
 // Sending a prompt into a CLI that may not be listening yet.
@@ -77,28 +82,46 @@ func (m *Manager) deliverPrompt(s *Session, text string) error {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 
-	// landed records that the text was seen on screen at least once. Once it has
-	// been, it is never typed again — only submitted. Re-pasting something that
-	// did arrive appends it a second time and sends the message twice.
+	// The terminal is not a reliable witness to a submission.
+	//
+	// It was the only signal at first, and it is wrong in both directions: a busy
+	// TUI scrolls a sent message out of the window in under a second, which reads
+	// as "never arrived", and treating that as failure retyped a message that had
+	// already gone. Treating it as success instead lost messages outright —
+	// measured, one send in three returned OK having delivered nothing.
+	//
+	// The transcript settles it. Claude Code appends the user's turn to its JSONL
+	// the moment a message is accepted, so the file appearing or growing is proof
+	// of delivery that owes nothing to how the screen was drawn.
+	grew := m.transcriptGrew(s)
+
+	// Typed exactly once. Never again.
+	//
+	// Retyping a prompt that could not be seen on screen was tried, in four
+	// increasingly careful versions, and every one of them sent somebody's
+	// message twice. The reason is simple and does not yield to tuning: for a
+	// few seconds after a message is accepted, an accepted message and a dropped
+	// one look identical — the composer is empty either way, the text is gone
+	// from the screen either way, and the transcript has not been written yet
+	// either way. Any rule that retypes inside that window eventually retypes a
+	// message that had already gone.
+	//
+	// A duplicate is silent and wrong and cannot be taken back. A failure is
+	// visible, and the person can simply press send again. So this types once,
+	// presses Enter as often as it likes — which is free, and fixes the common
+	// case of a swallowed return — and if the transcript never shows the turn,
+	// says so instead of guessing.
+	if err := m.Write(s.ID, []byte(pasteStart+text+pasteEnd)); err != nil {
+		return err
+	}
+	time.Sleep(submitGap)
+	if err := m.Write(s.ID, []byte("\r")); err != nil {
+		return err
+	}
+
 	landed := false
-	pastes := 0
-
 	deadline := time.Now().Add(deliverBudget)
-	for {
-		if !landed {
-			if pastes >= maxPastes {
-				return fmt.Errorf("the CLI did not accept the message. It may still be starting up — try again in a moment")
-			}
-			if err := m.Write(s.ID, []byte(pasteStart+text+pasteEnd)); err != nil {
-				return err
-			}
-			pastes++
-			time.Sleep(submitGap)
-		}
-		if err := m.Write(s.ID, []byte("\r")); err != nil {
-			return err
-		}
-
+	for time.Now().Before(deadline) {
 		time.Sleep(submitCheck)
 		s.mu.Lock()
 		gone := s.terminal()
@@ -107,44 +130,59 @@ func (m *Manager) deliverPrompt(s *Session, text string) error {
 			return nil
 		}
 
-		switch deliveryState(m.Tail(s.ID, tailWindow), text) {
-		case deliverySent:
+		// The proof, and the only thing that counts as one.
+		if grew() {
 			return nil
-		case deliveryTyped:
-			// It arrived and is waiting on the prompt line. Keep pressing Enter,
-			// but never type it again.
-			landed = true
-		case deliveryMissing:
-			if landed {
-				// Seen before and gone now, with the echo already scrolled away.
-				// Treat that as sent rather than risk sending it twice.
-				return nil
-			}
 		}
 
-		if time.Now().After(deadline) {
-			if landed {
-				return fmt.Errorf("the message is typed into the agent's terminal but the CLI has not taken it. Open the Terminal tab and press Enter")
+		// Still sitting on the prompt line: press Enter again. This is safe at
+		// any time, because Enter on an empty composer does nothing.
+		if deliveryState(m.Tail(s.ID, tailWindow), text) == deliveryTyped {
+			landed = true
+			if err := m.Write(s.ID, []byte("\r")); err != nil {
+				return err
 			}
-			return fmt.Errorf("the CLI did not accept the message. It may still be starting up — try again in a moment")
 		}
 	}
+
+	// One last look: the transcript may have grown as the budget ran out.
+	if grew() {
+		return nil
+	}
+
+	if landed {
+		return fmt.Errorf("the message is typed into the agent's terminal but the CLI has not taken it. Open the Terminal tab and press Enter")
+	}
+	return fmt.Errorf("the CLI did not accept the message — nothing was written to its transcript. It may still be starting up; press send again")
 }
 
 // delivery is what the terminal says happened to a prompt.
 type delivery int
 
 const (
-	// deliveryMissing: the text is nowhere on screen. It never arrived.
+	// deliveryMissing: the text is nowhere to be seen, which is ambiguous. It
+	// may never have arrived, or it may have gone through and scrolled out of
+	// the window being read — a busy TUI redraws enough to push it out in under
+	// a second. Nothing may be retyped on this alone.
 	deliveryMissing delivery = iota
 	// deliveryTyped: the text is on the prompt line, waiting for a return.
 	deliveryTyped
 	// deliverySent: the text is on screen but not on the prompt line, so the CLI
 	// has taken it.
 	deliverySent
+	// deliveryIdle: the composer is showing its own placeholder suggestion. That
+	// is positive evidence of an empty composer on an idle CLI — nothing was
+	// typed and nothing is being worked on — which is the one state where
+	// retyping cannot produce a duplicate.
+	deliveryIdle
 )
 
-// deliveryState reads the terminal to decide which of the three happened.
+// composerPlaceholder is the hint Claude Code shows in an empty composer. It is
+// only sometimes there — often the composer is simply blank — so its absence
+// says nothing.
+var composerPlaceholder = regexp.MustCompile(`^\s*Try\s+"`)
+
+// deliveryState reads the terminal to decide what happened to a prompt.
 func deliveryState(tail, text string) delivery {
 	want := squash(text)
 	if len(want) > 40 {
@@ -154,7 +192,9 @@ func deliveryState(tail, text string) delivery {
 		return deliverySent
 	}
 	clean := stripANSI(tail)
-	if i := strings.LastIndex(clean, "❯"); i >= 0 {
+
+	i := strings.LastIndex(clean, "❯")
+	if i >= 0 {
 		if strings.Contains(squash(clean[i:]), want) {
 			return deliveryTyped
 		}
@@ -162,7 +202,25 @@ func deliveryState(tail, text string) delivery {
 	if strings.Contains(squash(clean), want) {
 		return deliverySent
 	}
+	// An empty composer with the text nowhere on screen. On its own this is not
+	// enough to act on — it is also what a just-submitted message looks like —
+	// but paired with a transcript that has not grown, and seen several times
+	// running, it is the CLI sitting there having never received the paste.
+	if i >= 0 && composerEmpty(clean[i+len("❯"):]) {
+		return deliveryIdle
+	}
 	return deliveryMissing
+}
+
+// composerEmpty reports whether the prompt line holds nothing typed.
+func composerEmpty(after string) bool {
+	line := after
+	if n := strings.IndexByte(line, '\n'); n >= 0 {
+		line = line[:n]
+	}
+	// The box the composer is drawn in is not content.
+	line = strings.Trim(line, " \t ─│┌┐└┘")
+	return line == "" || composerPlaceholder.MatchString(line)
 }
 
 // squash removes whitespace so wrapped and re-indented text still compares.
@@ -190,14 +248,10 @@ const (
 	// submitCheck is how long to wait before reading the terminal back.
 	submitCheck = 700 * time.Millisecond
 
-	// maxPastes bounds re-typing a prompt that never arrived. More than this at
-	// a CLI that is not reading would just be shouting.
-	maxPastes = 3
-
 	// deliverBudget is how long to keep trying before saying so. Long enough to
 	// outlast a slow connect, short enough that a stuck send is reported rather
 	// than hung on.
-	deliverBudget = 12 * time.Second
+	deliverBudget = 20 * time.Second
 
 	// tailWindow is how much of the terminal to read back. Wide enough that a
 	// submitted prompt is still visible above the composer after the CLI has
@@ -243,4 +297,64 @@ func (m *Manager) SendKeys(sessionID string, data string) error {
 		m.MarkInputReady(sessionID)
 	}
 	return m.Write(sessionID, []byte(data))
+}
+
+// transcriptGrew returns a check that reports whether the CLI has written a new
+// turn since it was created.
+//
+// Claude Code appends the user's message to its JSONL transcript the moment it
+// accepts one, so this is proof of delivery that does not depend on how the
+// terminal happened to redraw. For a session's very first message there is no
+// transcript yet, and the file appearing at all is the same proof.
+//
+// The session id may not be known yet when a prompt is sent, so it is looked up
+// again on each check rather than captured once.
+func (m *Manager) transcriptGrew(s *Session) func() bool {
+	s.mu.Lock()
+	dir, cwd, pid, provider := s.AccountDir, s.CWD, s.PID, s.Provider
+	sid := s.ClaudeSessionID
+	s.mu.Unlock()
+
+	if provider != store.ProviderClaude || dir == "" || cwd == "" {
+		return func() bool { return false }
+	}
+
+	find := func() (string, bool) {
+		id := sid
+		if id == "" {
+			s.mu.Lock()
+			id = s.ClaudeSessionID
+			s.mu.Unlock()
+		}
+		if id == "" && pid != 0 {
+			if meta := claudefs.FindSessionMeta([]string{dir}, pid); meta != nil {
+				id = meta.SessionID
+			}
+		}
+		if id == "" {
+			return "", false
+		}
+		return claudefs.FindTranscript(dir, cwd, id)
+	}
+
+	base := int64(-1)
+	if p, ok := find(); ok {
+		if st, err := os.Stat(p); err == nil {
+			base = st.Size()
+		}
+	}
+
+	return func() bool {
+		p, ok := find()
+		if !ok {
+			return false
+		}
+		st, err := os.Stat(p)
+		if err != nil {
+			return false
+		}
+		// -1 means there was no transcript when we started, so its existence is
+		// itself the new turn.
+		return st.Size() > base
+	}
 }

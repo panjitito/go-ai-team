@@ -135,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sessions/{id}/scrollback", s.sessionScrollback)
 	mux.HandleFunc("GET /api/sessions/{id}/conversation", s.conversation)
 	mux.HandleFunc("POST /api/sessions/{id}/attach", s.attachToSession)
+	mux.HandleFunc("GET /api/pastes/{session}/{name}", s.servePastedFile)
 
 	// --- settings, misc ---
 	mux.HandleFunc("GET /api/settings", s.getSettings)

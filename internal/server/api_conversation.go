@@ -71,7 +71,7 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 	if p.ClaudeSessionID != "" {
 		if path, found := claudefs.FindTranscript(p.AccountDir, p.CWD, p.ClaudeSessionID); found {
 			if msgs, err := claudefs.ParseConversation(path, limit); err == nil {
-				out.Messages = msgs
+				out.Messages = s.withImageBlocks(msgs)
 				out.Ready = true
 			}
 		}

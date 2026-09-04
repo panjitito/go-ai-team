@@ -775,9 +775,11 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 }
 .attach.bad { border-color: var(--danger); }
 .attach-thumb {
-  width: 40px; height: 40px; object-fit: cover;
-  border-radius: 5px; background: var(--bg); flex: none;
+  width: 60px; height: 60px; object-fit: cover;
+  border-radius: 6px; background: var(--bg); flex: none;
+  cursor: zoom-in; border: 1px solid var(--line);
 }
+.attach-thumb:hover { border-color: var(--accent); }
 .attach-meta { min-width: 0; }
 .attach-name {
   font-size: 12px; white-space: nowrap;
@@ -790,3 +792,35 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 }
 .attach-x:hover { color: var(--fg); }
 #chatBody.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+/* A pasted image inside a message. The picture is the message — the path it was
+   sent as is a caption, not the content. */
+.msg-fig { margin: 8px 0; max-width: 460px; }
+.msg-img {
+  display: block; max-width: 100%; max-height: 340px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); cursor: zoom-in;
+}
+.msg-img:hover { border-color: var(--accent); }
+.msg-fig figcaption {
+  font-size: 11px; color: var(--fg-mute);
+  margin-top: 4px; word-break: break-all;
+}
+.msg-img-gone {
+  font-size: 12px; color: var(--fg-mute);
+  border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px;
+}
+
+/* Full-size view. */
+.lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column; gap: 10px;
+  align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .82); cursor: zoom-out;
+  padding: 24px;
+}
+.lightbox-img {
+  max-width: 96vw; max-height: 88vh;
+  border-radius: 8px; box-shadow: 0 18px 60px rgba(0, 0, 0, .6);
+}
+.lightbox-name { font-size: 12px; color: #cfd6e2; }
