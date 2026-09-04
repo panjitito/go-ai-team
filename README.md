@@ -61,6 +61,8 @@ point, since the alternative charges per month for a few hundred of them.
 | | |
 |---|---|
 | **Agent grid** | Role colours, live status dots, account dot on every avatar. |
+| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. The terminal is a toggle away. |
+| **Paste an image** | Paste or drop a screenshot into the composer. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |
 | **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
 | **Live terminals** | Real PTYs over websocket into xterm.js, 256KB scrollback replayed on attach. |
 | **Morph** | Change a running agent's role in place, keeping its conversation. Optional "fresh eyes". |
@@ -294,12 +296,20 @@ When the CLI says it is out of quota:
 4. The CLI is relaunched with `--resume` and nudged to *continue*, not restart.
 5. The bench lifts by itself when the window reopens.
 
-**The detector only fires on a real limit message.** Warnings, percentages and
-quota panels are ignored by construction, there is a 90-second cooldown so a
+**A pattern match is a suspicion, not a verdict.** This is the correction of a
+claim that used to sit here. Matching alone benched a perfectly healthy account
+during testing, on a line of prose that merely *discussed* rate limits and
+happened to be on screen — and no wording is clever enough to prevent that,
+because a terminal shows file contents, fetched pages and conversation text.
+
+So a match is confirmed by behaviour before anything irreversible happens: the
+session is watched for a few seconds, and a real limit stops it dead, whereas
+content that only mentions one is followed by the agent carrying straight on.
+Warnings, percentages and quota panels are still ignored by construction, quoted
+lines are skipped, only the tail is scanned, there is a 90-second cooldown so a
 resumed conversation cannot re-trigger on its own replayed history, and the
-app's own announcement is excluded from matching. A false positive would spend a
-subscription you did not intend to spend, so the test suite asserts the
-expensive mistakes stay non-matches.
+app's own announcement is excluded. Those narrow the noise; the confirmation is
+what makes acting on a match safe.
 
 Any account can be marked **never a backup** — the right answer when you keep a
 strict line between an employer's subscription and your own.
@@ -361,7 +371,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-52 tests. Covered: the cwd encoder against real transcript directories, the
+72 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth
@@ -369,6 +379,22 @@ states, schedule arithmetic including short months, webhook signatures and
 gating, SQL write/stacked-statement classification, vault round-trips including
 "the value is not readable on disk", the MCP protocol and its project scope,
 JSON salvage, the list-endpoint contract, and the browser profile's preference seeding.
+
+Several of those exist because the code was run for real and something broke
+that review had not caught. Each keeps its own evidence:
+
+- **The pseudo-terminal must be closed exactly once.** A second
+  `ClosePseudoConsole` on a closed handle ends the whole process on Windows —
+  no panic, no error, nothing in the log. Two closes were reachable together, so
+  pressing **Stop** killed Go AI Team and every other agent it was running.
+- **Prompt delivery is verified, not assumed.** Two different things went wrong
+  and looked identical: the return swallowed by bracketed paste, leaving the text
+  typed and unsent; and the paste arriving while the CLI was still connecting, so
+  it never landed at all. The terminal is read back to tell them apart, because
+  waiting longer only makes the second rarer.
+- **A limit match is confirmed before an account is benched.** See above.
+- **No two UI scripts may declare the same top-level name.** They share one global
+  scope, so the file that loads last silently replaces the other's helper.
 
 Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
 checks including the failure cases, and an end-to-end automation run that fires

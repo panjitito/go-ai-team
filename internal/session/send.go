@@ -1,8 +1,10 @@
 package session
 
 import (
+	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Sending a prompt into a CLI that may not be listening yet.
@@ -46,22 +48,132 @@ func (m *Manager) SendPrompt(sessionID, text string) error {
 		s.inputReady = true
 		s.mu.Unlock()
 	}
-	// The prompt goes in as a bracketed paste, then Enter arrives separately.
-	//
-	// Claude Code turns bracketed paste on (ESC[?2004h). In that mode a terminal
-	// tells the application where pasted content starts and ends, and anything
-	// arriving unwrapped in a fast burst is ambiguous: the text landed in the
-	// composer but the trailing return was swallowed as part of the paste, so
-	// the prompt sat there typed and unsent while the agent looked idle for a
-	// reason nothing on screen explained.
-	//
-	// Wrapping the text makes it unambiguously a paste, and the return that
-	// follows is unambiguously a keypress.
-	if err := m.Write(sessionID, []byte(pasteStart+text+pasteEnd)); err != nil {
-		return err
+	return m.deliverPrompt(s, text)
+}
+
+// deliverPrompt types the prompt and then confirms it actually arrived.
+//
+// Two different things go wrong, and only one of them was handled before:
+//
+//   - The return is swallowed. Claude Code turns bracketed paste on
+//     (ESC[?2004h), and in that mode text plus a trailing return in one burst
+//     reads as a single paste. The prompt lands in the composer and sits there,
+//     typed and unsent. Wrapping the text in the paste markers and sending the
+//     return separately fixes that one.
+//
+//   - The paste never arrives. While the CLI is still connecting it is not
+//     reading input at all, and the bytes go nowhere. The composer is left
+//     showing its own placeholder, so nothing on screen suggests a message was
+//     ever sent.
+//
+// Waiting longer before typing only makes the second rarer, never impossible,
+// and the two look identical from the outside. So the terminal is read back:
+// text on the prompt line needs another return, text absent entirely needs to be
+// typed again.
+func (m *Manager) deliverPrompt(s *Session, text string) error {
+	// One prompt at a time per session. Without this, confirming one message
+	// while the next is being typed would press Enter into somebody else's
+	// half-written text.
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+
+	// landed records that the text was seen on screen at least once. Once it has
+	// been, it is never typed again — only submitted. Re-pasting something that
+	// did arrive appends it a second time and sends the message twice.
+	landed := false
+	pastes := 0
+
+	deadline := time.Now().Add(deliverBudget)
+	for {
+		if !landed {
+			if pastes >= maxPastes {
+				return fmt.Errorf("the CLI did not accept the message. It may still be starting up — try again in a moment")
+			}
+			if err := m.Write(s.ID, []byte(pasteStart+text+pasteEnd)); err != nil {
+				return err
+			}
+			pastes++
+			time.Sleep(submitGap)
+		}
+		if err := m.Write(s.ID, []byte("\r")); err != nil {
+			return err
+		}
+
+		time.Sleep(submitCheck)
+		s.mu.Lock()
+		gone := s.terminal()
+		s.mu.Unlock()
+		if gone {
+			return nil
+		}
+
+		switch deliveryState(m.Tail(s.ID, tailWindow), text) {
+		case deliverySent:
+			return nil
+		case deliveryTyped:
+			// It arrived and is waiting on the prompt line. Keep pressing Enter,
+			// but never type it again.
+			landed = true
+		case deliveryMissing:
+			if landed {
+				// Seen before and gone now, with the echo already scrolled away.
+				// Treat that as sent rather than risk sending it twice.
+				return nil
+			}
+		}
+
+		if time.Now().After(deadline) {
+			if landed {
+				return fmt.Errorf("the message is typed into the agent's terminal but the CLI has not taken it. Open the Terminal tab and press Enter")
+			}
+			return fmt.Errorf("the CLI did not accept the message. It may still be starting up — try again in a moment")
+		}
 	}
-	time.Sleep(submitGap)
-	return m.Write(sessionID, []byte("\r"))
+}
+
+// delivery is what the terminal says happened to a prompt.
+type delivery int
+
+const (
+	// deliveryMissing: the text is nowhere on screen. It never arrived.
+	deliveryMissing delivery = iota
+	// deliveryTyped: the text is on the prompt line, waiting for a return.
+	deliveryTyped
+	// deliverySent: the text is on screen but not on the prompt line, so the CLI
+	// has taken it.
+	deliverySent
+)
+
+// deliveryState reads the terminal to decide which of the three happened.
+func deliveryState(tail, text string) delivery {
+	want := squash(text)
+	if len(want) > 40 {
+		want = want[:40]
+	}
+	if want == "" {
+		return deliverySent
+	}
+	clean := stripANSI(tail)
+	if i := strings.LastIndex(clean, "❯"); i >= 0 {
+		if strings.Contains(squash(clean[i:]), want) {
+			return deliveryTyped
+		}
+	}
+	if strings.Contains(squash(clean), want) {
+		return deliverySent
+	}
+	return deliveryMissing
+}
+
+// squash removes whitespace so wrapped and re-indented text still compares.
+func squash(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if !unicode.IsSpace(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 const (
@@ -74,6 +186,23 @@ const (
 	// for the application to have consumed the paste, short enough to be
 	// imperceptible.
 	submitGap = 140 * time.Millisecond
+
+	// submitCheck is how long to wait before reading the terminal back.
+	submitCheck = 700 * time.Millisecond
+
+	// maxPastes bounds re-typing a prompt that never arrived. More than this at
+	// a CLI that is not reading would just be shouting.
+	maxPastes = 3
+
+	// deliverBudget is how long to keep trying before saying so. Long enough to
+	// outlast a slow connect, short enough that a stuck send is reported rather
+	// than hung on.
+	deliverBudget = 12 * time.Second
+
+	// tailWindow is how much of the terminal to read back. Wide enough that a
+	// submitted prompt is still visible above the composer after the CLI has
+	// redrawn, which is what tells "sent" apart from "never arrived".
+	tailWindow = 32 << 10
 )
 
 // waitReady blocks until the session stops producing output, or the deadline.

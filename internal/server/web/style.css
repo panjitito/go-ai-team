@@ -754,3 +754,39 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
   .chat-head { overflow-x: auto; }
   .chat-banner { width: calc(100% - 24px); }
 }
+
+/* Pasted images, shown above the composer so what is about to be sent is
+   visible before it is sent. */
+.composer-wrap {
+  flex: none; display: flex; flex-direction: column;
+  background: var(--bg-1); border-top: 1px solid var(--line);
+}
+/* The border now lives on the wrapper, so the thumbnails and the box read as
+   one surface rather than two stacked panels. */
+.composer-wrap > .composer { border-top: 0; }
+.attach-strip {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 22px 0 22px;
+}
+.attach {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; max-width: 260px;
+}
+.attach.bad { border-color: var(--danger); }
+.attach-thumb {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: 5px; background: var(--bg); flex: none;
+}
+.attach-meta { min-width: 0; }
+.attach-name {
+  font-size: 12px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.attach-sub { font-size: 11px; color: var(--dim); }
+.attach-x {
+  background: none; border: 0; color: var(--dim);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.attach-x:hover { color: var(--fg); }
+#chatBody.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }

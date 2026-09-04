@@ -53,6 +53,9 @@ function openAgent(sessionId, mode) {
     el('div', { class: 'term-host', id: 'termHost', style: 'display:none' }),
     composer(sessionId));
   main.append(wrap);
+  // After mounting, so the drop zone can find the conversation area.
+  wireDropZone(sessionId);
+  attachReset();
 
   // The scroll position decides whether new messages pull the view down. A
   // person reading back through history should not be yanked to the bottom
@@ -126,8 +129,11 @@ function composer(sessionId) {
     box.style.height = 'auto';
     box.style.height = Math.min(box.scrollHeight, 180) + 'px';
   });
+  wireAttachments(box, sessionId);
 
-  return el('div', { class: 'composer' },
+  return el('div', { class: 'composer-wrap' },
+    el('div', { class: 'attach-strip', id: 'attachStrip', style: 'display:none' }),
+    el('div', { class: 'composer' },
     el('div', { class: 'composer-side' },
       el('button', { class: 'btn ghost sm', title: 'Prompt library', onclick: openPrompts }, '📋'),
       el('button', {
@@ -143,7 +149,7 @@ function composer(sessionId) {
     box,
     el('div', { class: 'composer-side' },
       el('button', { class: 'btn sm', title: 'Right-size the model before sending', onclick: () => adaptiveCheck(sessionId) }, '⚖'),
-      el('button', { class: 'btn primary', onclick: () => sendComposer(sessionId) }, 'Send')));
+      el('button', { class: 'btn primary', onclick: () => sendComposer(sessionId) }, 'Send'))));
 }
 
 // ---------------------------------------------------------------- polling
@@ -365,20 +371,35 @@ function closeTermSocket() {
 async function sendComposer(sessionId) {
   const box = $('#composerBox');
   if (!box) return;
-  const text = box.value;
-  if (!text.trim()) return;
+
+  // An upload still in flight means the file is not on disk yet. Sending now
+  // would point the agent at a path that does not exist.
+  if (attachBusy()) { toast('Still uploading that image…'); return; }
+
+  // Pasted images go in front of the prompt as paths, which is how the CLI is
+  // given a picture: it reads the file. A paste on its own is a complete message
+  // — "look at this" is a normal thing to send — so an empty box with an
+  // attachment is not treated as empty.
+  const paths = attachPaths();
+  const typed = box.value.trim();
+  if (!typed && !paths.length) return;
+  const text = paths.length ? paths.join('\n') + (typed ? '\n' + typed : '') : box.value;
+
   box.value = '';
   box.style.height = 'auto';
+  attachReset();
 
   // Show it immediately: waiting for the transcript to catch up makes the app
   // feel like it dropped the message.
   const body = $('#chatBody');
+  let echo = null;
   if (body && S.chatMode === 'chat') {
     let list = body.querySelector('.msgs');
     if (!list) { body.innerHTML = ''; list = el('div', { class: 'msgs' }); body.append(list); }
-    list.append(messageEl(
+    echo = messageEl(
       { role: 'user', blocks: [{ kind: 'text', text }], when: new Date().toISOString() },
-      new Set()));
+      new Set());
+    list.append(echo);
     CHAT.atBottom = true;
     body.scrollTop = body.scrollHeight;
     CHAT.lastSig = '';
@@ -387,8 +408,14 @@ async function sendComposer(sessionId) {
   try {
     await api(`/sessions/${sessionId}/input`, { method: 'POST', body: { data: text, enter: true } });
   } catch (e) {
+    // Delivery is confirmed against the terminal now, so this really can mean
+    // the CLI never took the message. Leaving the optimistic bubble on screen
+    // would claim it was sent, so it comes back out and the text is returned to
+    // the box for another try.
+    if (echo) echo.remove();
     toast(e.message, 'bad');
     box.value = text;
+    box.dispatchEvent(new Event('input'));
   }
 }
 

@@ -99,7 +99,21 @@ type Session struct {
 	// resume carries the Claude session id across an auto-switch relaunch.
 	resumeID string
 
-	mu      sync.Mutex
+	mu sync.Mutex
+	// ptyOnce guards the pseudo-terminal against being closed twice.
+	//
+	// This is not tidiness. On Windows a pty is a pseudoconsole, and calling
+	// ClosePseudoConsole on an already-closed handle takes the whole process
+	// down instantly — no panic, no error, no signal, nothing in the log. Two
+	// closes were reachable together: Stop closes the pty, and the read loop
+	// then sees EOF and closes it again on its way out. Pressing Stop killed
+	// Go AI Team itself, and every other agent that was running with it.
+	ptyOnce sync.Once
+
+	// sendMu serialises prompt delivery. Confirming one message means pressing
+	// Enter at the terminal, which must not land in the next message being typed.
+	sendMu sync.Mutex
+
 	pty     pty.Pty
 	cmd     *pty.Cmd
 	ring    *ring
@@ -272,6 +286,19 @@ func (m *Manager) Spawn(o SpawnOpts) (*Session, error) {
 	if o.ResumeID != "" && o.Provider == store.ProviderClaude {
 		args = append(args, "--resume", o.ResumeID)
 	}
+	// Let the session read the folder pasted images are written to. They are kept
+	// outside the project on purpose, so without this every pasted screenshot
+	// would stop on a permission prompt before the agent could look at it.
+	//
+	// Agents only. A sign-in terminal has nothing to read and the flow is
+	// delicate enough without an extra flag in it.
+	if o.Provider == store.ProviderClaude && o.Kind == KindAgent {
+		if root := AttachRoot(m.st.RootDir()); root != "" {
+			if err := os.MkdirAll(root, 0o700); err == nil {
+				args = append(args, "--add-dir", root)
+			}
+		}
+	}
 
 	s, err := m.spawnRaw(spawnRawOpts{
 		Kind:         o.Kind,
@@ -390,7 +417,7 @@ func (m *Manager) waitLoop(s *Session) {
 	// printing its result and exiting would show a blank terminal about one run
 	// in five. So wait for the reader to stop making progress before closing.
 	drainPTY(s)
-	_ = s.pty.Close()
+	s.closePTY()
 	m.emit(Event{Type: "session.exited", SessionID: s.ID, AgentID: s.AgentID, Payload: s.Public()})
 }
 
@@ -494,7 +521,15 @@ func (m *Manager) Stop(id string) error {
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
-	return s.pty.Close()
+	return s.closePTY()
+}
+
+// closePTY closes the pseudo-terminal at most once. See ptyOnce: a second close
+// is not a harmless no-op on Windows, it ends the process.
+func (s *Session) closePTY() error {
+	var err error
+	s.ptyOnce.Do(func() { err = s.pty.Close() })
+	return err
 }
 
 // Remove drops a finished session from the registry.

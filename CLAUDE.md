@@ -47,6 +47,19 @@ slice serialising as `null`, a credentials file that exists but holds no tokens.
 - Nothing is killed, deleted or uploaded without the user asking.
 - No credential is ever returned by the API, logged, or put in a prompt.
 
+## Closing a pseudo-terminal twice ends the process
+
+On Windows a pty is a pseudoconsole, and calling `ClosePseudoConsole` on a
+handle that is already closed terminates the whole process instantly — no panic,
+no error return, no signal, nothing written to the log. It looks exactly like the
+app being killed from outside.
+
+This actually happened: `Stop` closed the pty, the read loop then hit EOF and
+closed it again on its way out, and pressing **Stop** in the UI killed Go AI Team
+along with every other agent it was running. `Session.closePTY` now guards it
+with a `sync.Once`. Never add another `pty.Close()` call — route it through
+`closePTY`.
+
 ## Shell gotcha
 
 Writing Go or JS source through a bash heredoc into Python mangles backslash
