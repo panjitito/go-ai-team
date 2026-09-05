@@ -31,6 +31,11 @@ type conversationResp struct {
 
 	Status session.Status `json:"status"`
 
+	// Line is what the CLI prints along the bottom of its own terminal: the
+	// model, how full the context is, the spend, and how much of the rate-limit
+	// windows has gone. Surfaced here so nobody has to switch tabs to read it.
+	Line session.StatusLine `json:"line"`
+
 	// The token meter, carried on the poll the chat view already makes so the
 	// header badge does not depend on a separate list refresh landing first.
 	TotalTokens  int64   `json:"totalTokens"`
@@ -59,6 +64,7 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 		Messages:     []claudefs.Message{},
 		SessionID:    p.ClaudeSessionID,
 		Status:       p.Status,
+		Line:         s.sm.StatusLineOf(sess.ID),
 		TotalTokens:  p.TotalTokens,
 		CacheHitRate: p.CacheHitRate,
 	}

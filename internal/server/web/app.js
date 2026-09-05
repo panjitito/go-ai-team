@@ -58,9 +58,12 @@ const ROLES = [
   ['Security',   '#10b981'], ['Docs',       '#64748b'], ['Reviewer', '#ec4899'],
 ];
 
+// Aliases rather than pinned ids, so "opus" keeps meaning the current Opus
+// instead of freezing an agent on whichever one was latest the day it was made.
 const MODELS = [
   ['',        'Default (CLI decides)'],
   ['opus',    'Opus — deep work'],
+  ['fable',   'Fable — deep work, newest'],
   ['sonnet',  'Sonnet — everyday'],
   ['haiku',   'Haiku — cheap and fast'],
 ];

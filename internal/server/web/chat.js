@@ -174,6 +174,7 @@ function composer(sessionId) {
   wireAttachments(box, sessionId);
 
   return el('div', { class: 'composer-wrap' },
+    runBarEl(sessionId),
     el('div', { class: 'attach-strip', id: 'attachStrip', style: 'display:none' }),
     el('div', { class: 'composer' },
     el('div', { class: 'composer-side' },
@@ -222,6 +223,7 @@ function leaveAgent() {
 
 function renderConversation(d, sessionId) {
   updateTermTokens(d);
+  updateRunBar(d);
   const banner = $('#chatBanner');
   const body = $('#chatBody');
   if (!banner || !body) return;
