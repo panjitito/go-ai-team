@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -75,9 +78,16 @@ type SearchResult struct {
 }
 
 const (
-	defaultSearchLimit  = 120
-	defaultSearchBudget = 768 << 20
+	defaultSearchLimit = 120
+	// A budget high enough that the deadline is what actually stops a search on
+	// this corpus, and low enough to be a guard on one ten times the size.
+	defaultSearchBudget = 4 << 30
 	defaultSearchTime   = 6 * time.Second
+
+	// searchWorkers is how many transcripts are read at once. See the comment in
+	// Search: four, because four was measured to be the fastest here and six was
+	// slower.
+	searchWorkers = 4
 
 	// searchLineCap skips a single line longer than this.
 	//
@@ -112,19 +122,74 @@ func Search(o SearchOpts) SearchResult {
 	needle := []byte(q)
 	stop := time.Now().Add(o.Deadline)
 
-	for _, f := range files {
-		if res.Bytes >= o.Budget || len(res.Hits) >= o.Limit || time.Now().After(stop) {
-			res.Truncated = true
-			break
-		}
-		res.Files++
-		res.Bytes += scanTranscript(f, needle, o.Limit, &res)
+	// Four readers, measured rather than guessed.
+	//
+	// One thread manages 323 MB/s on this machine and four manage 1,094 — the
+	// work is a read and a pass over the bytes, and neither the disk nor one core
+	// is busy while the other waits. Six was slower than four, so this does not
+	// scale with the core count and is not written as if it does. It is the
+	// difference between a whole-machine search finishing and timing out.
+	workers := runtime.NumCPU()
+	if workers > searchWorkers {
+		workers = searchWorkers
 	}
-	// Newest first across conversations, which is not the same as file order
-	// once several files have contributed.
+	if workers < 1 {
+		workers = 1
+	}
+
+	var (
+		mu        sync.Mutex
+		bytesRead atomic.Int64
+		filesRead atomic.Int64
+		hitCount  atomic.Int64
+		truncated atomic.Bool
+		wg        sync.WaitGroup
+	)
+	work := make(chan transcript)
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for f := range work {
+				// Checked per file rather than per line: a file is the unit that
+				// can be skipped without leaving half a conversation searched.
+				if bytesRead.Load() >= o.Budget || hitCount.Load() >= int64(o.Limit) ||
+					time.Now().After(stop) {
+					truncated.Store(true)
+					continue // drain, so the feeder is never left blocked
+				}
+				filesRead.Add(1)
+				hits, read := scanTranscript(f, needle, o.Limit)
+				bytesRead.Add(read)
+				if len(hits) == 0 {
+					continue
+				}
+				hitCount.Add(int64(len(hits)))
+				mu.Lock()
+				res.Hits = append(res.Hits, hits...)
+				mu.Unlock()
+			}
+		}()
+	}
+	// Newest first into the queue, so a search that runs out of budget has spent
+	// it on the conversations most likely to be the one wanted.
+	for _, f := range files {
+		work <- f
+	}
+	close(work)
+	wg.Wait()
+
+	res.Files = int(filesRead.Load())
+	res.Bytes = bytesRead.Load()
+	res.Truncated = truncated.Load()
+
+	// Newest first across conversations, which is not the order they were read
+	// in once several workers have contributed.
 	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].When.After(res.Hits[j].When) })
 	if len(res.Hits) > o.Limit {
 		res.Hits = res.Hits[:o.Limit]
+		res.Truncated = true
 	}
 	return res
 }
@@ -209,12 +274,12 @@ func walkTranscripts(root, dir string) []transcript {
 	return out
 }
 
-// scanTranscript reads one file and appends what it finds. It returns the bytes
-// read, so the caller can hold a budget across files.
-func scanTranscript(f transcript, needle []byte, limit int, res *SearchResult) int64 {
+// scanTranscript reads one file. It returns what it found and how much it read,
+// so the caller can hold a budget across files and workers.
+func scanTranscript(f transcript, needle []byte, limit int) ([]Hit, int64) {
 	fh, err := os.Open(f.path)
 	if err != nil {
-		return 0
+		return nil, 0
 	}
 	defer fh.Close()
 
@@ -222,6 +287,7 @@ func scanTranscript(f transcript, needle []byte, limit int, res *SearchResult) i
 	sc.Buffer(make([]byte, 0, 256<<10), searchLineCap)
 
 	var read int64
+	var hits []Hit
 	lower := make([]byte, 0, 64<<10)
 
 	for sc.Scan() {
@@ -239,15 +305,15 @@ func scanTranscript(f transcript, needle []byte, limit int, res *SearchResult) i
 			continue
 		}
 		if h, ok := hitFrom(line, needle, f); ok {
-			res.Hits = append(res.Hits, h)
-			if len(res.Hits) >= limit {
-				return read
+			hits = append(hits, h)
+			if len(hits) >= limit {
+				return hits, read
 			}
 		}
 	}
 	// A line over the cap makes the scanner stop; the rest of that conversation
 	// is simply not searched, which is better than refusing to search any of it.
-	return read
+	return hits, read
 }
 
 // asciiLower lowercases in place. The transcripts are JSON, so the interesting

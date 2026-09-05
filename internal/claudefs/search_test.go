@@ -183,17 +183,30 @@ func TestSearchBudgetIsHonest(t *testing.T) {
 	}
 }
 
+// A search that runs long stops, and says it stopped.
+//
+// Enough files that reading them all takes appreciably longer than the deadline
+// — the point is a search abandoned partway, not one refused before it starts.
 func TestSearchDeadline(t *testing.T) {
 	home := t.TempDir()
 	cwd := `C:\p`
-	for i := 0; i < 4; i++ {
+	const files = 24
+	for i := 0; i < files; i++ {
 		writeTranscript(t, home, cwd, fmt.Sprintf("s%d", i),
-			searchAssistantLine("2026-09-01T10:00:00Z", "needle"))
+			searchAssistantLine("2026-09-01T10:00:00Z", strings.Repeat("x", 1<<20)+" needle"))
 	}
-	// A deadline already in the past stops before the first file.
-	got := Search(SearchOpts{Dirs: []string{home}, CWD: cwd, Query: "needle", Deadline: time.Nanosecond})
+
+	got := Search(SearchOpts{
+		Dirs: []string{home}, CWD: cwd, Query: "needle", Deadline: time.Millisecond,
+	})
 	if !got.Truncated {
-		t.Error("an expired deadline did not stop the search")
+		t.Errorf("read all %d files on a 1 ms deadline and called it complete", got.Files)
+	}
+	if got.Files >= files {
+		t.Errorf("read %d of %d files; the deadline stopped nothing", got.Files, files)
+	}
+	if got.Total != files {
+		t.Errorf("Total = %d, want all %d so the UI can say how much was skipped", got.Total, files)
 	}
 }
 
