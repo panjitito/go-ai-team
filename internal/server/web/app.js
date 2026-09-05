@@ -50,6 +50,7 @@ const TABS = [
   ['files',     'Files'],
   ['terminals', 'Terminals'],
   ['stats',     'Stats'],
+  ['activity',  'Activity'],
 ];
 
 const ROLES = [
@@ -527,7 +528,8 @@ function renderMain() {
   // Every tab but the grid renders asynchronously, because each fetches the
   // data it needs. Errors surface as a toast from tryApi.
   const async_views = { split: viewSplit, board: viewBoard, review: viewReview, files: viewFiles,
-                        terminals: viewTerminals, stats: viewStats };
+                        terminals: viewTerminals, stats: viewStats,
+                        activity: viewActivity };
   if (async_views[S.view]) {
     async_views[S.view](main).catch(e => {
       main.innerHTML = '';
@@ -1470,6 +1472,7 @@ function connectEvents() {
     alertScan();
 
     if (S.view === 'grid') renderMain();
+    if (S.view === 'activity') refreshActivitySoon();
     if (S.view === 'term') updateTermTokens();
     renderStatus(); renderTopbar();
     // The tree was not in this list, so its live count only changed when

@@ -59,6 +59,10 @@ type Server struct {
 	sched *automation.Scheduler
 	hooks *automation.Hooks
 
+	// log remembers what happened, so the morning after can be read rather than
+	// guessed at from where everything happens to be standing.
+	log *journal
+
 	// token guards the API when the server is reachable beyond loopback. It is
 	// generated per run and printed once, so binding to the LAN for phone access
 	// does not silently expose an unauthenticated terminal to the network.
@@ -84,12 +88,18 @@ type Deps struct {
 
 // New builds a Server.
 func New(d Deps) *Server {
-	return &Server{
+	s := &Server{
 		st: d.Store, accs: d.Accounts, sm: d.Sessions,
 		ai: d.AI, cat: d.Catalog, vault: d.Vault, db: d.DB, ssh: d.SSH,
-		sched: d.Sched, hooks: d.Hooks,
+		sched: d.Sched, hooks: d.Hooks, log: &journal{},
 		token: d.Token, loopback: d.Loopback,
 	}
+	// Recording starts with the server, not with the first person to open the
+	// page: what the log is for is the hours when nobody had it open.
+	if s.sm != nil {
+		go s.watchActivity()
+	}
+	return s
 }
 
 // Handler returns the fully routed HTTP handler.
@@ -143,6 +153,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/pastes/{session}/{name}", s.servePastedFile)
 
 	// --- settings, misc ---
+	mux.HandleFunc("GET /api/activity", s.listActivity)
+
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PATCH /api/settings", s.patchSettings)
 	mux.HandleFunc("GET /api/doctor", s.doctor)

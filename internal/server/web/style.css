@@ -1033,6 +1033,50 @@ table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
 }
 .mcp-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 
+/* ---- the activity log ----
+
+   A log is read by scanning down one column at a time, so the time, the agent
+   and the text each keep a column of their own and the eye never has to hunt
+   for where the next one starts. */
+
+.act-wrap { padding: 10px 16px 24px; overflow-y: auto; }
+.act-day {
+  position: sticky; top: 0; z-index: 1;
+  margin: 14px 0 4px; padding: 4px 0;
+  background: var(--bg); color: var(--fg-mute);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  border-bottom: 1px solid var(--line);
+}
+.act-day:first-child { margin-top: 0; }
+.act-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 5px 8px; border-radius: 6px; font-size: 12.5px; color: var(--fg-dim);
+}
+.act-row.go { cursor: pointer; }
+.act-row.go:hover { background: var(--bg-2); }
+.act-time { flex: none; width: 42px; color: var(--fg-mute); font-size: 11px; }
+.act-dot {
+  flex: none; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--line-2); align-self: center;
+}
+.act-row.warn .act-dot { background: #f59e0b; }
+.act-row.bad  .act-dot { background: #ef4444; }
+.act-row.warn .act-text { color: var(--fg); }
+.act-row.bad  .act-text { color: #fca5a5; }
+.act-who { flex: none; width: 130px; font-weight: 550; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-proj { flex: none; width: 110px; color: var(--fg-mute); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+
+@media (max-width: 780px) {
+  /* On a phone the columns cost more than they give. */
+  .act-row { flex-wrap: wrap; }
+  .act-who, .act-proj { width: auto; }
+  .act-text { flex: 1 0 100%; white-space: normal; padding-left: 52px; }
+}
+
 /* ---- the go-to palette ----
 
    Near the top rather than centred: the list grows downwards as you type, and a
