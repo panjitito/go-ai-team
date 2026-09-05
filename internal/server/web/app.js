@@ -174,6 +174,81 @@ const agentsOf    = pid => S.agents.filter(a => a.projectId === pid);
 const liveSession = agentId => S.sessions.find(
   s => s.agentId === agentId && s.kind === 'agent' && s.status !== 'exited' && s.status !== 'error');
 
+// ------------------------------------------------------- the projects panel
+//
+/* Collapsing it.
+ *
+ * The panel is 268px of a window that is mostly conversation, and on a laptop
+ * that is a real fraction of the screen — but only while you are not switching
+ * project, which is most of the time. There was a ☰ button for this already and
+ * it was hidden above 780px, so on a desktop there was no way to reclaim the
+ * space at all.
+ *
+ * One button, two behaviours, because the panel is two different things. Wide,
+ * it is a column and collapsing means the column goes to nothing. Narrow, it is
+ * already an overlay over the whole app and the button shows and hides that.
+ * Deciding which from the same media query the stylesheet uses keeps the two
+ * from disagreeing.
+ *
+ * The choice is remembered per browser rather than in the app's settings: a
+ * phone and a desktop want different answers, and the settings are shared
+ * between them.
+ */
+
+const NAV_KEY = 'goaiteam.nav.collapsed';
+const navNarrow = () => window.matchMedia('(max-width: 780px)').matches;
+
+function navCollapsed() {
+  try {
+    return localStorage.getItem(NAV_KEY) === '1';
+  } catch {
+    // Private browsing, or storage turned off. Not a reason to fail.
+    return false;
+  }
+}
+
+function applyNav() {
+  const app = $('#app');
+  const collapsed = navCollapsed();
+  // Only the wide layout has a column to collapse. On a phone the panel is an
+  // overlay and starts hidden either way, so the remembered state must not
+  // leave it stuck open there.
+  app.classList.toggle('nav-collapsed', collapsed && !navNarrow());
+  if (navNarrow()) app.classList.remove('nav-collapsed');
+  else $('#sidebar').classList.remove('open');
+
+  const btn = $('#menuBtn');
+  if (!btn) return;
+  const showing = navNarrow()
+    ? $('#sidebar').classList.contains('open')
+    : !collapsed;
+  btn.title = (showing ? 'Hide projects' : 'Show projects') + '  (Ctrl-B)';
+  btn.setAttribute('aria-expanded', showing ? 'true' : 'false');
+}
+
+function toggleNav() {
+  if (navNarrow()) {
+    $('#sidebar').classList.toggle('open');
+    applyNav();
+    return;
+  }
+  try {
+    localStorage.setItem(NAV_KEY, navCollapsed() ? '0' : '1');
+  } catch { /* nothing to remember it in; the toggle still works this session */ }
+  const app = $('#app');
+  app.classList.toggle('nav-collapsed');
+  // Kept in step with the class actually on the element, so a browser that
+  // refused to store anything still gets a correct label.
+  const btn = $('#menuBtn');
+  if (btn) {
+    const showing = !app.classList.contains('nav-collapsed');
+    btn.title = (showing ? 'Hide projects' : 'Show projects') + '  (Ctrl-B)';
+    btn.setAttribute('aria-expanded', showing ? 'true' : 'false');
+  }
+  // The terminal refits itself: mountTerminal puts a ResizeObserver on its
+  // host, and the host just changed width.
+}
+
 // ---------------------------------------------------------------- data load
 
 async function loadAll() {
@@ -1298,7 +1373,23 @@ $('#guardBtn').onclick = openGuard;
 $('#addProjectBtn').onclick = addProject;
 $('#settingsBtn').onclick = openSettings;
 $('#doctorBtn').onclick = openDoctor;
-$('#menuBtn').onclick = () => $('#sidebar').classList.toggle('open');
+$('#menuBtn').onclick = toggleNav;
+
+// Ctrl-B, because that is the shortcut every editor uses for this and muscle
+// memory is worth more than a novel one. Not while a modifier combination means
+// something else, and harmless in the composer: a textarea does nothing with
+// Ctrl-B of its own.
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    toggleNav();
+  }
+});
+
+applyNav();
+// A window dragged across the phone breakpoint changes what the button means,
+// so the state is reapplied rather than left as whatever it was.
+window.matchMedia('(max-width: 780px)').addEventListener('change', applyNav);
 
 loadAll().then(connectEvents).catch(e => {
   document.body.innerHTML =

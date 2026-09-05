@@ -401,7 +401,23 @@ table.kv tr:last-child td { border-bottom: none; }
   .modal { max-width: 100%; }
   .composer textarea { font-size: 15px; } /* stop iOS zooming on focus */
 }
-@media (min-width: 781px) { #menuBtn { display: none; } }
+/* Collapsing the projects panel.
+ *
+ * The button used to be hidden above 780px, on the reasoning that a wide window
+ * has room for the panel — which is true right up until you want the room for
+ * something else, and then there is no way to reclaim it. It is the only way
+ * back once the panel is hidden, so it is always on screen.
+ */
+/* Scoped to the wide layout on purpose. Narrow, the panel is already an overlay
+   and the app is one column; a stray collapsed class there would define two
+   columns against one-column areas and the whole grid would fall back. The
+   script clears the class at that width too — this makes it impossible rather
+   than merely handled. */
+@media (min-width: 781px) {
+  #app.nav-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  #app.nav-collapsed .brand,
+  #app.nav-collapsed .sidebar { display: none; }
+}
 
 /* ---------- layout with the tab bar ---------- */
 
