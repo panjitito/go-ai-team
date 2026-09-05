@@ -76,3 +76,13 @@ away.
 Writing Go or JS source through a bash heredoc into Python mangles backslash
 escapes: `\n` and `\x1b` end up as real bytes inside string literals and break
 the file. Use the Write or Edit tools for content containing escapes.
+
+## Do not edit prose with perl or sed
+
+Multi-line `perl -0pi -e 's|...|...|'` over Markdown has silently welded table
+rows onto the document title in this repo twice, and both times it was committed
+before anyone looked. The pattern matches across the newline, the replacement
+loses it, and nothing errors.
+
+Use the Write or Edit tools for prose and for anything with escapes. `sed` on a
+single well-anchored line is fine; a multi-line pattern is not.

@@ -1,4 +1,4 @@
-| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. It says so while the agent is working, with what it is doing and for how long. The terminal is a toggle away. |# Go AI Team
+# Go AI Team
 
 An open cockpit for Claude Code and friends: run every account you own side by
 side, drive a board, schedule and trigger agents, review what they wrote, and
@@ -61,7 +61,7 @@ point, since the alternative charges per month for a few hundred of them.
 | | |
 |---|---|
 | **Agent grid** | Role colours, live status dots, account dot on every avatar. |
-| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. The terminal is a toggle away. |
+| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. It says so while the agent is working — what it is doing, and for how long. The terminal is a toggle away. |
 | **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and read it back as a picture rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |
 | **Files** | Browse the project, read a file with line numbers and highlighting, edit it and save. A save carries the hash the file was opened at, so if an agent rewrote it meanwhile the save is refused rather than clobbering their work. |
 | **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
