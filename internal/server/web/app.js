@@ -224,6 +224,8 @@ function applyNav() {
     : !collapsed;
   btn.title = (showing ? 'Hide projects' : 'Show projects') + '  (Ctrl-B)';
   btn.setAttribute('aria-expanded', showing ? 'true' : 'false');
+  // What the panel would have shown, now that it cannot.
+  paintNavActivity();
 }
 
 function toggleNav() {
@@ -272,6 +274,111 @@ async function loadAll() {
   updateWaitingCount();
 }
 
+// ------------------------------------------------------- activity in the tree
+//
+/* Which projects have something happening in them.
+ *
+ * The tree showed a count of live agents and nothing else, so a project with
+ * three agents looked the same whether all three were working, all three were
+ * waiting on you, or all three had finished ten minutes ago. With the panel
+ * usually showing several projects at once, that is the one question it should
+ * be able to answer at a glance.
+ *
+ * Three resting states and one transition. Working pulses, because motion is
+ * what the eye catches across a screen. Needing you is steady and bright, on
+ * purpose: a thing that wants a decision should not be competing with the
+ * spinner next to it. Running-but-idle is a dim dot, present but quiet. And when
+ * the last agent in a project stops working, the dot flashes green once and
+ * settles — the moment work finishes is a moment worth noticing, and it is
+ * exactly the one nothing reported before.
+ *
+ * Painted in place rather than re-rendered. The tree is rebuilt on a full
+ * render, but status events arrive every few seconds, and rebuilding the row
+ * each time would restart every animation mid-pulse and make the panel twitch.
+ */
+
+const ACTIVITY = {
+  // was maps a project to the state it was last seen in, which is the only way
+  // to notice the change from working to not.
+  was: {},
+  timers: {},
+};
+
+// projectActivity summarises what a project's agents are doing.
+function projectActivity(projectId) {
+  const live = agentsOf(projectId).map(a => liveSession(a.id)).filter(Boolean);
+  if (!live.length) return { state: '', live: 0 };
+  if (live.some(s => s.needsYou)) return { state: 'needs', live: live.length };
+  if (live.some(s => s.status === 'working' || s.status === 'starting')) {
+    return { state: 'working', live: live.length };
+  }
+  return { state: 'idle', live: live.length };
+}
+
+const ACTIVITY_TITLE = {
+  working: 'working',
+  needs: 'waiting for you',
+  idle: 'running, nothing in progress',
+};
+
+// paintActivity updates the indicators without touching the rest of the tree.
+function paintActivity() {
+  for (const p of S.projects) {
+    const node = document.querySelector(`.tree-item[data-project="${CSS.escape(p.id)}"] .activity`);
+    if (!node) continue;
+
+    const { state, live } = projectActivity(p.id);
+    const before = ACTIVITY.was[p.id] || '';
+    ACTIVITY.was[p.id] = state;
+
+    // The transition worth showing: something was working here and has stopped.
+    // Not when it stopped to ask a question — that is not finishing, and the
+    // panel is about to say so in a much louder way.
+    if (before === 'working' && state !== 'working' && state !== 'needs') {
+      node.classList.add('just-done');
+      clearTimeout(ACTIVITY.timers[p.id]);
+      ACTIVITY.timers[p.id] = setTimeout(() => {
+        node.classList.remove('just-done');
+        // Repainted, not just unclassed: the tick below has to go with it.
+        paintActivity();
+      }, 4200);
+    }
+    if (state === 'working' || state === 'needs') node.classList.remove('just-done');
+
+    node.className = 'activity' + (state ? ' act-' + state : '') +
+      (node.classList.contains('just-done') ? ' just-done' : '');
+    // A tick when the work is finished and the agent has gone, because the
+    // count is what gives the badge its shape and there is no count left — the
+    // flash was otherwise a small green blob in the margin.
+    node.textContent = live ? String(live)
+      : (node.classList.contains('just-done') ? '✓' : '');
+    node.title = live
+      ? `${live} agent${live === 1 ? '' : 's'} — ${ACTIVITY_TITLE[state] || ''}`
+      : '';
+  }
+  paintNavActivity();
+}
+
+// paintNavActivity puts the same answer on the ☰ button, because the panel this
+// is drawn in can be collapsed and then none of it is visible at all.
+function paintNavActivity() {
+  const btn = $('#menuBtn');
+  if (!btn) return;
+  let worst = '';
+  for (const p of S.projects) {
+    const { state } = projectActivity(p.id);
+    if (state === 'needs') { worst = 'needs'; break; }
+    if (state === 'working') worst = 'working';
+    else if (state && !worst) worst = 'idle';
+  }
+  // Only while the panel is collapsed. The classes come off together rather
+  // than being left inert, so what the element says about itself is true.
+  const show = !!worst && $('#app').classList.contains('nav-collapsed');
+  btn.classList.toggle('has-activity', show);
+  btn.classList.toggle('act-needs', show && worst === 'needs');
+  btn.classList.toggle('act-working', show && worst === 'working');
+}
+
 // ---------------------------------------------------------------- render
 
 function render() {
@@ -280,6 +387,7 @@ function render() {
   renderSidebar();
   renderMain();
   renderStatus();
+  paintActivity();
 }
 
 function renderTopbar() {
@@ -336,7 +444,6 @@ function renderSidebar() {
   const rootFolders = S.folders.filter(f => !f.parentId);
   const drawProject = (p, nested) => {
     const acct = accountById(p.accountId);
-    const live = agentsOf(p.id).filter(a => liveSession(a.id)).length;
     const row = el('div', {
       class: 'tree-item' + (nested ? ' nested' : '') + (S.selectedProject === p.id ? ' active' : ''),
       onclick: () => {
@@ -352,7 +459,11 @@ function renderSidebar() {
       el('span', { class: 'acct-dot', style: `background:${acct ? acct.color : '#3a4250'}`,
         title: acct ? `pinned to ${acct.name}` : 'inherits the cascade' }),
       el('span', { class: 'name', text: p.name, title: p.path }),
-      live ? el('span', { class: 'count', text: String(live) }) : null);
+      // Always present, even when nothing is running. Painted in place rather
+      // than rebuilt, so an animation starts once and is not restarted by the
+      // next status event a second later.
+      el('span', { class: 'activity', 'data-for': p.id }));
+    row.dataset.project = p.id;
     dndDraggable(row, 'project', p.id);
     return row;
   };
@@ -1304,6 +1415,7 @@ function connectEvents() {
       if (S.view === 'grid') renderMain();
       renderTopbar(); renderStatus(); renderSidebar();
       updateWaitingCount();
+      paintActivity();
       return;
     }
 
@@ -1356,6 +1468,10 @@ function connectEvents() {
     if (S.view === 'grid') renderMain();
     if (S.view === 'term') updateTermTokens();
     renderStatus(); renderTopbar();
+    // The tree was not in this list, so its live count only changed when
+    // something else forced a full render — a project could sit showing "1"
+    // long after that agent had gone.
+    paintActivity();
   };
 }
 

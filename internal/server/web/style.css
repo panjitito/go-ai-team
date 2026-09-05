@@ -174,6 +174,66 @@ label:first-child { margin-top: 0; }
   background: var(--bg); padding: 1px 6px; border-radius: 20px;
 }
 .tree-item.folder { font-weight: 600; color: var(--fg); }
+
+/* ---- what is happening in a project ----
+
+   The count on its own said a project had three agents and nothing about
+   whether they were working, waiting on you, or long finished. Motion is what
+   the eye catches across a panel of several projects, so working pulses;
+   needing you is steady and bright rather than animated, because a thing
+   wanting a decision should not have to compete with the spinner beside it. */
+
+.activity {
+  font: 11px var(--mono); color: var(--fg-mute);
+  background: var(--bg); padding: 1px 6px; border-radius: 20px;
+  min-width: 20px; text-align: center; position: relative;
+}
+/* Nothing running: no badge at all, rather than an empty pill. */
+.activity:empty { background: none; padding: 0; min-width: 0; }
+
+.activity.act-idle { color: var(--fg-dim); }
+.activity.act-working {
+  color: #1a1005; background: var(--warn); font-weight: 600;
+  animation: act-pulse 1.5s ease-in-out infinite;
+}
+.activity.act-needs {
+  color: #06121b; background: var(--info); font-weight: 700;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, .18);
+}
+
+/* The moment work finishes, which is the one thing nothing reported before.
+   It ends on the resting appearance, so when the animation is over the badge
+   simply looks like whatever it now is. */
+.activity.just-done { animation: act-done 1.4s ease-out 2 both; }
+
+@keyframes act-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+@keyframes act-done {
+  0%   { background: var(--ok); color: #04170c; box-shadow: 0 0 0 4px rgba(34, 197, 94, .28); }
+  60%  { background: var(--ok); color: #04170c; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  100% { background: var(--bg); color: var(--fg-dim); box-shadow: none; }
+}
+
+/* The panel can be collapsed, and then none of the above is on screen. The
+   toggle carries the summary instead. */
+#menuBtn { position: relative; }
+#menuBtn.has-activity::after {
+  content: ""; position: absolute; top: 2px; right: 2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--fg-mute); box-shadow: 0 0 0 2px var(--bg-1);
+}
+#menuBtn.has-activity.act-working::after {
+  background: var(--warn); animation: act-pulse 1.5s ease-in-out infinite;
+}
+#menuBtn.has-activity.act-needs::after { background: var(--info); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still distinguishable, without anything moving: working is the only state
+     that was relying on motion to be told apart. */
+  .activity.act-working,
+  #menuBtn.has-activity.act-working::after { animation: none; }
+  .activity.act-working { box-shadow: 0 0 0 3px rgba(245, 158, 11, .22); }
+  .activity.just-done { animation: act-done 1.4s ease-out 1 both; }
+}
 .tree-item.nested { margin-left: 14px; }
 
 .acct-dot {
