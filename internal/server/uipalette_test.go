@@ -130,7 +130,22 @@ new Promise(async resolve => {
     btn.click();
     await sleep(120);
     out.openedByButton = !!document.querySelector('#palHost');
+
+    // "?" is a character while you are typing and a question everywhere else.
+    document.querySelector('#palInput').dispatchEvent(new KeyboardEvent('keydown',
+      { key: '?', bubbles: true, cancelable: true }));
+    await sleep(120);
+    out.keysWhileTyping = !!document.querySelector('#overlay');
     closePalette();
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown',
+      { key: '?', bubbles: true, cancelable: true }));
+    await sleep(150);
+    out.keysOpened = !!document.querySelector('#overlay');
+    out.keysTitle = (document.querySelector('#overlay h2') || {}).textContent;
+    out.keysCombos = [...document.querySelectorAll('.keys-combo')]
+      .map(n => [...n.querySelectorAll('kbd')].map(k => k.textContent).join(' '));
+    closeModal();
 
     resolve(JSON.stringify(out));
   } catch (e) {
@@ -173,6 +188,10 @@ new Promise(async r => {
 		EscClosed        bool     `json:"escClosed"`
 		BtnHint          string   `json:"btnHint"`
 		OpenedByButton   bool     `json:"openedByButton"`
+		KeysWhileTyping  bool     `json:"keysWhileTyping"`
+		KeysOpened       bool     `json:"keysOpened"`
+		KeysTitle        string   `json:"keysTitle"`
+		KeysCombos       []string `json:"keysCombos"`
 	}
 	if err := json.Unmarshal([]byte(got), &r); err != nil {
 		t.Fatalf("unreadable: %v (%s)", err, got)
@@ -224,5 +243,24 @@ new Promise(async r => {
 	}
 	if r.BtnHint != "Ctrl K" {
 		t.Errorf("the button's key hint reads %q", r.BtnHint)
+	}
+
+	// The list of shortcuts, which is the only way most of them get found.
+	if r.KeysWhileTyping {
+		t.Error("\"?\" opened the keyboard sheet mid-sentence; in a text box it is a character")
+	}
+	if !r.KeysOpened || r.KeysTitle != "Keyboard" {
+		t.Errorf("\"?\" opened %v (%q)", r.KeysOpened, r.KeysTitle)
+	}
+	for _, want := range []string{"Ctrl K", "Ctrl Shift F", "Ctrl B"} {
+		found := false
+		for _, got := range r.KeysCombos {
+			if got == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q is not on the sheet: %v", want, r.KeysCombos)
+		}
 	}
 }

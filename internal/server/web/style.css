@@ -1121,6 +1121,22 @@ table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
   padding: 6px 12px; border-top: 1px solid var(--line);
   font: 10.5px var(--mono); color: var(--fg-mute);
 }
+/* ---- the keyboard sheet ---- */
+
+.keys-group {
+  margin: 16px 0 6px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--fg-mute);
+}
+.keys-group:first-child { margin-top: 0; }
+.keys-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.keys-table td { padding: 4px 0; vertical-align: baseline; color: var(--fg-dim); }
+.keys-combo { width: 170px; white-space: nowrap; }
+.keys-combo kbd {
+  display: inline-block; margin-right: 4px; padding: 1px 6px;
+  font: 11px var(--mono); color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px;
+}
+
 /* ---- searching the transcripts ----
 
    Wider and taller than the palette: a result is a paragraph of somebody's
