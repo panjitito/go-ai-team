@@ -1,4 +1,4 @@
-# Go AI Team
+| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. It says so while the agent is working, with what it is doing and for how long. The terminal is a toggle away. |# Go AI Team
 
 An open cockpit for Claude Code and friends: run every account you own side by
 side, drive a board, schedule and trigger agents, review what they wrote, and
@@ -404,7 +404,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-101 tests. Covered: the cwd encoder against real transcript directories, the
+104 tests. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth

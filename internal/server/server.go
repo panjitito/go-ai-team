@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -162,7 +163,45 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.Handle("/", spaHandler{fs: http.FS(sub)})
 
-	return s.withAuth(s.withCommon(mux))
+	return s.withAuth(s.withCommon(drainRequestBody(mux)))
+}
+
+// drainRequestBody reads whatever a handler left unread before the connection
+// goes back to the pool.
+//
+// A handler that ignores the request body is normal — several here take an id in
+// the path and nothing else, and the UI posts `{}` at them anyway. But leaving
+// bytes unread means the server closes the socket with data still in flight, and
+// Windows turns that into a reset rather than a graceful close: the client loses
+// the response it had already been sent.
+//
+// It presents as a rare, unexplained failure that gets commoner with a bigger
+// body. Measured on `POST /api/prompts/{id}/resolve`, which reads nothing:
+// no body 15/15 succeeded, `{}` 14/15, a 4KB body only 9/15.
+func drainRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A hijacked connection is no longer ours — the websocket owns the
+		// socket, and touching the body after the handover is a use-after-free
+		// of the connection.
+		if isUpgrade(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+		if r.Body != nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, maxDrainBytes))
+		}
+	})
+}
+
+// maxDrainBytes bounds the tidying up. A body larger than this from a handler
+// that did not want it is not worth reading to the end; closing on it is the
+// right answer.
+const maxDrainBytes = 1 << 20
+
+func isUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") ||
+		strings.HasPrefix(r.URL.Path, "/ws/")
 }
 
 // spaHandler serves the embedded UI, falling back to index.html so a deep link

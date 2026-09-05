@@ -24,6 +24,13 @@ const CHAT = {
   poll: null,
   lastSig: '',
   atBottom: true,
+  // awaiting covers the gap between pressing Send and the first poll noticing
+  // that the agent has started. sentAt bounds it so it cannot stick.
+  awaiting: false,
+  sentAt: 0,
+  // thinkingSince drives the elapsed count; thinkingTimer is its ticker.
+  thinkingSince: 0,
+  thinkingTimer: null,
 };
 
 // conversational reports whether a session has a transcript to render. Only a
@@ -206,6 +213,8 @@ function stopChatPoll() {
 }
 
 function leaveAgent() {
+  CHAT.awaiting = false;
+  stopThinkingClock();
   stopChatPoll();
   closeTermSocket();
   S.openSession = null;
@@ -243,7 +252,12 @@ function renderConversation(d, sessionId) {
     m.id, m.blocks.length,
     m.blocks.map(b => b.kind === 'tool' ? (b.tool.pending ? 'p' : 'd') + b.tool.result.length : b.text.length).join(','),
   ]));
-  if (sig === CHAT.lastSig) return;
+  if (sig === CHAT.lastSig) {
+    // Nothing new to draw, but the agent may well be working — and the whole
+    // point of the indicator is the stretch where nothing is being drawn.
+    syncThinking(d);
+    return;
+  }
   CHAT.lastSig = sig;
 
   const open = new Set([...body.querySelectorAll('.tool.open')].map(n => n.dataset.id));
@@ -261,8 +275,106 @@ function renderConversation(d, sessionId) {
   const list = el('div', { class: 'msgs' });
   for (const m of d.messages) list.append(messageEl(m, open));
   body.append(list);
+  syncThinking(d);
 
   if (CHAT.atBottom) body.scrollTop = body.scrollHeight;
+}
+
+// ------------------------------------------------------------ the wait
+
+/* Showing that the agent is working.
+ *
+ * Between pressing Send and the first words coming back there can be a long
+ * silence: the CLI is thinking, or reading files, and none of that reaches the
+ * transcript until a turn is written. The conversation view showed nothing at
+ * all in that gap — the message you had just sent, and then stillness — while
+ * the terminal tab, one click away, was visibly busy. That is the worst possible
+ * split: the app looks broken precisely when it is working hardest.
+ *
+ * The indicator is deliberately outside the repaint gate. The list is only
+ * rebuilt when the transcript changes, and the whole point here is the stretch
+ * where the transcript is not changing.
+ */
+
+// syncThinking shows or hides the indicator from the latest poll.
+function syncThinking(d) {
+  const working = d.status === 'working' || d.status === 'starting';
+
+  // Once the server agrees the agent is busy, its status drives everything and
+  // the optimistic flag set on send has done its job.
+  if (working) CHAT.awaiting = false;
+
+  // The flag covers the gap before the first poll notices. It cannot stick:
+  // an assistant turn arriving after the send clears it, and so does a wait
+  // long enough that nothing can plausibly still be starting.
+  if (CHAT.awaiting) {
+    const last = d.messages && d.messages.length ? d.messages[d.messages.length - 1] : null;
+    const replied = last && last.role === 'assistant' &&
+      last.when && new Date(last.when).getTime() >= CHAT.sentAt - 1000;
+    if (replied || Date.now() - CHAT.sentAt > 30000) CHAT.awaiting = false;
+  }
+
+  showThinking(working || CHAT.awaiting, activityOf(d));
+}
+
+// activityOf names what the agent is doing, when the transcript says.
+function activityOf(d) {
+  const msgs = (d && d.messages) || [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const blocks = msgs[i].blocks || [];
+    for (let j = blocks.length - 1; j >= 0; j--) {
+      const b = blocks[j];
+      if (b.kind === 'tool' && b.tool && b.tool.pending) return b.tool.name;
+    }
+    // Only the most recent turn is worth inspecting; older tools are finished.
+    if (msgs[i].role === 'assistant') break;
+  }
+  return '';
+}
+
+// showThinking creates, updates or removes the indicator.
+function showThinking(on, activity) {
+  const body = $('#chatBody');
+  if (!body) return;
+  let node = body.querySelector('.thinking');
+
+  if (!on) {
+    if (node) node.remove();
+    stopThinkingClock();
+    return;
+  }
+
+  if (!node) {
+    CHAT.thinkingSince = CHAT.thinkingSince || Date.now();
+    node = el('div', { class: 'thinking' },
+      el('div', { class: 'thinking-dots' }, el('i'), el('i'), el('i')),
+      el('span', { class: 'thinking-what' }),
+      el('span', { class: 'thinking-for' }));
+    body.append(node);
+    startThinkingClock();
+    if (CHAT.atBottom) body.scrollTop = body.scrollHeight;
+  }
+  node.querySelector('.thinking-what').textContent = activity ? activity : 'Working';
+  paintThinkingClock();
+}
+
+// The elapsed count ticks locally once a second. Driving it from the 1.5s poll
+// would make it stutter and skip, which reads as the app being stuck.
+function startThinkingClock() {
+  if (CHAT.thinkingTimer) return;
+  CHAT.thinkingTimer = setInterval(paintThinkingClock, 1000);
+}
+
+function stopThinkingClock() {
+  if (CHAT.thinkingTimer) { clearInterval(CHAT.thinkingTimer); CHAT.thinkingTimer = null; }
+  CHAT.thinkingSince = 0;
+}
+
+function paintThinkingClock() {
+  const node = document.querySelector('.thinking .thinking-for');
+  if (!node || !CHAT.thinkingSince) return;
+  const s = Math.max(0, Math.round((Date.now() - CHAT.thinkingSince) / 1000));
+  node.textContent = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
 function messageEl(m, openSet) {
@@ -480,6 +592,14 @@ async function sendComposer(sessionId) {
     CHAT.lastSig = '';
   }
 
+  // Say it is working straight away, rather than after the next poll notices.
+  // The delay is only a second and a half, but it lands exactly where a person
+  // is asking themselves whether the message went anywhere at all.
+  CHAT.awaiting = true;
+  CHAT.sentAt = Date.now();
+  CHAT.thinkingSince = Date.now();
+  showThinking(true, '');
+
   try {
     await api(`/sessions/${sessionId}/input`, { method: 'POST', body: { data: text, enter: true } });
   } catch (e) {
@@ -488,6 +608,8 @@ async function sendComposer(sessionId) {
     // would claim it was sent, so it comes back out and the text is returned to
     // the box for another try.
     if (echo) echo.remove();
+    CHAT.awaiting = false;
+    showThinking(false, '');
     toast(e.message, 'bad');
     box.value = text;
     box.dispatchEvent(new Event('input'));
