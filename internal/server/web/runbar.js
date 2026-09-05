@@ -25,6 +25,16 @@ function switchableModels() {
 // The levels `claude --effort` accepts.
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
+// The permission modes, in the order the CLI cycles them, with what each one
+// actually means rather than just its name.
+const MODES = [
+  ['auto', 'auto', 'It decides which actions are safe and asks about the rest'],
+  ['manual', 'manual', 'Asks before every action'],
+  ['acceptEdits', 'accept edits', 'Edits files without asking; still asks for the rest'],
+  ['plan', 'plan', 'Changes nothing — researches and writes a plan first'],
+];
+const MODE_LABELS = Object.fromEntries(MODES.map(([k, label]) => [k, label]));
+
 const RUNBAR = {
   // effort is not printed in the status line, so the only honest thing to show
   // is what was last set from here.
@@ -41,6 +51,11 @@ function runBarEl(sessionId) {
       class: 'rb-btn', id: 'rbEffort', title: 'Change the effort level',
       onclick: e => effortMenu(e.currentTarget, sessionId),
     }, 'effort'),
+    el('button', {
+      class: 'rb-btn', id: 'rbMode',
+      title: 'Permission mode — how much it asks before acting',
+      onclick: e => modeMenu(e.currentTarget, sessionId),
+    }, 'mode'),
     el('span', { class: 'rb-sep' }),
     el('span', { class: 'rb-stat', id: 'rbCtx', title: 'Context window used' }),
     el('span', { class: 'rb-stat', id: 'rbCost', title: 'Cost of this session' }),
@@ -70,6 +85,15 @@ function updateRunBar(d) {
 
   const eff = $('#rbEffort');
   if (eff) eff.textContent = RUNBAR.effort || 'effort';
+
+  const mode = $('#rbMode');
+  if (mode) {
+    mode.textContent = MODE_LABELS[line.mode] || 'mode';
+    // Plan touches nothing and accept-edits touches everything without asking.
+    // Both are worth noticing from across the room.
+    mode.classList.toggle('mode-plan', line.mode === 'plan');
+    mode.classList.toggle('mode-loose', line.mode === 'acceptEdits');
+  }
 
   setStat('#rbCtx', line.hasContext, () => `ctx ${line.context}%`);
   setStat('#rbCost', line.hasCost, () => '$' + Number(line.cost).toFixed(2));
@@ -103,11 +127,13 @@ function setMeter(sel, has, pct) {
 function rbMenu(anchor, items) {
   for (const old of document.querySelectorAll('.rb-menu')) old.remove();
   const menu = el('div', { class: 'rb-menu' });
-  for (const [label, onPick, active] of items) {
+  for (const [label, onPick, active, note] of items) {
     menu.append(el('button', {
       class: 'rb-menu-item' + (active ? ' active' : ''),
       onclick: () => { menu.remove(); onPick(); },
-    }, label));
+    },
+      el('span', { text: label }),
+      note ? el('span', { class: 'rb-menu-note', text: note }) : null));
   }
   document.body.append(menu);
 
@@ -143,6 +169,38 @@ function effortMenu(anchor, sessionId) {
     },
     RUNBAR.effort === lvl,
   ]));
+}
+
+// modeMenu changes the permission mode.
+//
+// There is no command that jumps to a mode — the CLI cycles them with shift+tab
+// — so the server presses that key until the terminal says it has arrived. Which
+// modes are in the cycle depends on the model, so this can land somewhere else,
+// and when it does the bar says where rather than claiming success.
+function modeMenu(anchor, sessionId) {
+  const current = currentMode();
+  rbMenu(anchor, MODES.map(([key, label, note]) => [
+    label,
+    async () => {
+      const btn = $('#rbMode');
+      if (btn) btn.textContent = '…';
+      try {
+        const r = await api(`/sessions/${sessionId}/mode`, { method: 'POST', body: { mode: key } });
+        toast(`${MODE_LABELS[r.mode] || label} mode`, 'ok');
+      } catch (e) {
+        toast(e.message, 'bad');
+      }
+    },
+    key === current,
+    note,
+  ]));
+}
+
+// currentMode reads what the bar is showing, which came from the terminal.
+function currentMode() {
+  const txt = (($('#rbMode') || {}).textContent || '').trim();
+  const hit = MODES.find(([, label]) => label === txt);
+  return hit ? hit[0] : '';
 }
 
 // runSlash sends the CLI one of its own commands.

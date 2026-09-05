@@ -722,6 +722,51 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 }
 .chat-banner .btn { align-self: flex-start; }
 
+/* ---- the permission prompt, as buttons ----
+
+   This is the most frequent thing on screen after the conversation itself, so
+   it is deliberately calm: no red, no alarm, no motion. It reads as a question
+   being asked, because that is what it is. The distinct colour from the banner
+   above is the point — that one says "go elsewhere", this one is answerable
+   where it stands. */
+
+/* The panel takes the banner's slot, so the banner's own frame steps aside. */
+.chat-banner.as-ask {
+  background: none; border: 0; padding: 0; margin: 0; width: 100%; max-width: none;
+}
+
+.ask {
+  flex: none; margin: 12px auto 0; max-width: 860px; width: calc(100% - 44px);
+  background: linear-gradient(180deg, #16202b, #131922);
+  border: 1px solid #2c4256; border-radius: 12px;
+  padding: 13px 15px; display: flex; flex-direction: column; gap: 11px;
+}
+.ask-q { display: flex; align-items: baseline; gap: 9px; }
+.ask-q strong { color: #cfe6ff; font-weight: 600; line-height: 1.45; }
+.ask-icon { font-size: 13px; opacity: .85; flex: none; }
+.ask-options { display: flex; flex-direction: column; gap: 6px; }
+.ask-opt {
+  display: flex; align-items: flex-start; gap: 10px; text-align: left;
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: 9px; padding: 8px 11px; cursor: pointer;
+  color: var(--fg-dim); font: inherit; line-height: 1.45;
+}
+.ask-opt:hover { border-color: var(--info); color: var(--fg); background: var(--bg-3); }
+/* The option the CLI's own cursor is on, so what Enter in the terminal would
+   do is not a different answer from what this panel suggests. */
+.ask-opt.selected { border-color: #3d6d92; color: var(--fg); }
+.ask-opt.selected .ask-num { background: var(--info); color: #06121b; border-color: var(--info); }
+.ask-opt.no:hover { border-color: var(--bad); }
+.ask-opt.picked { opacity: .55; pointer-events: none; }
+.ask-num {
+  flex: none; width: 19px; height: 19px; border-radius: 5px;
+  border: 1px solid var(--line-2); background: var(--bg-3);
+  font: 600 11px/17px var(--mono); text-align: center; color: var(--fg-mute);
+}
+.ask-label { flex: 1; }
+.ask-foot { display: flex; align-items: center; gap: 10px; }
+.ask-foot .hint { flex: 1; }
+
 .chat-empty { text-align: center; padding: 60px 20px; color: var(--fg-mute); }
 .chat-empty-title { font-size: 15px; color: var(--fg-dim); margin-bottom: 6px; }
 
@@ -1045,6 +1090,13 @@ body.dnd-active .drop-root { display: block; }
 }
 .rb-menu-item:hover { background: var(--bg-3); color: var(--fg); }
 .rb-menu-item.active { color: var(--brand); font-weight: 600; }
+.rb-menu-item { display: flex; flex-direction: column; gap: 2px; max-width: 300px; }
+.rb-menu-note { color: var(--fg-mute); font-size: 10.5px; font-weight: 400; line-height: 1.4; }
+
+/* Two of the four modes change what the agent will do without asking, and both
+   are worth seeing from across the room rather than reading. */
+.rb-btn.mode-plan { border-color: #2f5f7d; color: #8fd0f5; }
+.rb-btn.mode-loose { border-color: var(--brand-dim); color: var(--brand); }
 
 @media (max-width: 780px) {
   .runbar { padding: 6px 12px 0 12px; }

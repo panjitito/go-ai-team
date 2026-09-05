@@ -56,7 +56,13 @@ type ToolCall struct {
 	// skimmable.
 	Summary string `json:"summary,omitempty"`
 	Input   string `json:"input,omitempty"`
-	Result  string `json:"result,omitempty"`
+	// Result carries no omitempty on purpose. A tool that is still running has
+	// no result, and dropping the field left the browser reading .length off
+	// undefined — which threw inside the conversation render, before it had
+	// drawn anything, and froze the whole view for as long as the tool was
+	// pending. Normally that is a fraction of a second and nobody sees it.
+	// Waiting on a permission prompt, it is for as long as you take to answer.
+	Result  string `json:"result"`
 	IsError bool   `json:"isError,omitempty"`
 	// Pending is true while the result has not arrived, which is how the UI
 	// shows a tool still running.

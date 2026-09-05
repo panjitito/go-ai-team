@@ -156,7 +156,15 @@ function chatHeader(sess, title) {
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Change role, keep the conversation', onclick: () => morphAgent(sess) }, '⟳') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Fork a twin with this conversation', onclick: () => forkAgent(sess) }, '⑃') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Run on another account', onclick: () => manualSwitch(sess) }, '↻') : null,
-    el('button', { class: 'btn danger sm', onclick: () => stopSession(sessionId) }, 'Stop'));
+    // Interrupt is not Stop, and putting them side by side is the point: one
+    // ends the turn, the other ends the session. It only appears while there is
+    // a turn to interrupt.
+    el('button', {
+      class: 'btn sm', id: 'interruptBtn', style: 'display:none',
+      title: 'Stop this turn and keep the session (Escape)',
+      onclick: () => interruptSession(sessionId),
+    }, 'Interrupt'),
+    el('button', { class: 'btn danger sm', title: 'End the session', onclick: () => stopSession(sessionId) }, 'Stop'));
 }
 
 function composer(sessionId) {
@@ -228,8 +236,19 @@ function renderConversation(d, sessionId) {
   const body = $('#chatBody');
   if (!banner || !body) return;
 
+  // A permission prompt becomes buttons. Everything else the CLI draws itself —
+  // the trust dialog, the sign-in code — still gets the banner below, because
+  // those cannot be reduced to a numbered choice.
+  const asking = renderAsk(d, sessionId);
+  const stopBtn = $('#interruptBtn');
+  if (stopBtn) stopBtn.style.display = d.status === 'working' ? '' : 'none';
+
   // The terminal-prompt banner: without it, a trust prompt looks like a hang.
-  if (d.needsTerminal) {
+  // It shares a slot with the panel above, so it only runs when there is no
+  // question to answer here.
+  if (asking) {
+    // nothing to add: the panel owns the banner while a question is up.
+  } else if (d.needsTerminal) {
     banner.style.display = '';
     banner.innerHTML = '';
     banner.append(
@@ -245,14 +264,25 @@ function renderConversation(d, sessionId) {
     banner.style.display = 'none';
   }
 
+  // "waiting" is what the status says either way, but only one of the two is
+  // waiting on *you*, and that is worth naming.
   const st = $('#chatStatus');
-  if (st) st.innerHTML = `<span class="dot ${d.status}"></span> ${d.status}`;
+  if (st) {
+    st.innerHTML = asking
+      ? '<span class="dot waiting"></span> needs you'
+      : `<span class="dot ${d.status}"></span> ${d.status}`;
+  }
 
   // Repaint only when something actually changed: rebuilding the list every
   // 1.5 seconds would fight text selection and lose scroll position.
+  // Every field is read defensively. This runs before anything is drawn, so a
+  // missing one does not produce a small glitch — it throws, the poll swallows
+  // it, and the view silently stops updating.
   const sig = JSON.stringify(d.messages.map(m => [
-    m.id, m.blocks.length,
-    m.blocks.map(b => b.kind === 'tool' ? (b.tool.pending ? 'p' : 'd') + b.tool.result.length : b.text.length).join(','),
+    m.id, (m.blocks || []).length,
+    (m.blocks || []).map(b => b.kind === 'tool'
+      ? ((b.tool || {}).pending ? 'p' : 'd') + ((b.tool || {}).result || '').length
+      : (b.text || '').length).join(','),
   ]));
   if (sig === CHAT.lastSig) {
     // Nothing new to draw, but the agent may well be working — and the whole
@@ -300,6 +330,13 @@ function renderConversation(d, sessionId) {
 
 // syncThinking shows or hides the indicator from the latest poll.
 function syncThinking(d) {
+  // A question on screen is the agent waiting on you, not working. Leaving the
+  // indicator spinning over a panel of buttons says the opposite of the truth.
+  if (d.ask) {
+    CHAT.awaiting = false;
+    showThinking(false, '');
+    return;
+  }
   const working = d.status === 'working' || d.status === 'starting';
 
   // Once the server agrees the agent is busy, its status drives everything and

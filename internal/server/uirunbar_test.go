@@ -63,8 +63,24 @@ new Promise(async resolve => {
   const emenu = document.querySelector('.rb-menu');
   const efforts = emenu ? [...emenu.querySelectorAll('.rb-menu-item')].map(b => b.textContent) : [];
   document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  await sleep(200);
+
+  // The permission mode, which is the largest lever the CLI has and had no
+  // switch here at all. Each entry says what the mode does, not just its name.
+  document.querySelector('#rbMode').click();
+  await sleep(300);
+  const mmenu = document.querySelector('.rb-menu');
+  const modes = mmenu
+    ? [...mmenu.querySelectorAll('.rb-menu-item')].map(b => b.firstChild.textContent)
+    : [];
+  const modeNotes = mmenu
+    ? [...mmenu.querySelectorAll('.rb-menu-item .rb-menu-note')].length
+    : 0;
+  document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 
   resolve(JSON.stringify({
+    mode: txt('#rbMode'),
+    modes, modeNotes,
     model: txt('#rbModel'),
     fiveHourShown: shown('#rb5h'),
     weeklyShown: shown('#rbWk'),
@@ -98,6 +114,9 @@ new Promise(async resolve => {
 		WeeklyPct     string   `json:"weeklyPct"`
 		Models        []string `json:"models"`
 		Efforts       []string `json:"efforts"`
+		Mode          string   `json:"mode"`
+		Modes         []string `json:"modes"`
+		ModeNotes     int      `json:"modeNotes"`
 		MenuAbove     bool     `json:"menuAbove"`
 		OnScreen      bool     `json:"onScreen"`
 		BarCount      int      `json:"barCount"`
@@ -136,6 +155,16 @@ new Promise(async resolve => {
 	}
 	if len(r.Efforts) != 5 {
 		t.Errorf("effort menu = %v, want the five levels the CLI accepts", r.Efforts)
+	}
+	if r.Mode == "" || r.Mode == "mode" {
+		t.Errorf("the permission mode is not shown (%q); the CLI prints it above its composer", r.Mode)
+	}
+	if len(r.Modes) != 4 {
+		t.Errorf("mode menu = %v, want the four the CLI cycles", r.Modes)
+	}
+	if r.ModeNotes != len(r.Modes) {
+		t.Errorf("%d of %d modes explain what they do; a name alone is not enough here",
+			r.ModeNotes, len(r.Modes))
 	}
 	// The bar sits at the bottom of the window, so a menu dropping downwards
 	// would open off screen.

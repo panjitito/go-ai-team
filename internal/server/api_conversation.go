@@ -23,8 +23,14 @@ type conversationResp struct {
 	// rather than "no messages".
 	Ready bool `json:"ready"`
 
+	// Ask is a permission prompt read off the terminal and offered as buttons.
+	// Nil when there is no question on screen.
+	Ask *session.Ask `json:"ask,omitempty"`
+
 	// NeedsTerminal is true when the CLI is drawing a prompt that must be
-	// answered with the keyboard in the terminal view.
+	// answered with the keyboard in the terminal view. It stays for the prompts
+	// Ask cannot turn into buttons — the trust dialog, the sign-in code — so
+	// those still get a way through instead of looking like a hang.
 	NeedsTerminal bool   `json:"needsTerminal"`
 	PromptTitle   string `json:"promptTitle,omitempty"`
 	PromptText    string `json:"promptText,omitempty"`
@@ -71,7 +77,14 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 
 	// A prompt in the terminal is checked first: it is the case where the
 	// conversation view would otherwise look frozen for no visible reason.
-	if need, title := session.NeedsTerminal(s.sm.Tail(p.ID, 6000)); need {
+	//
+	// A permission prompt becomes buttons; anything else still gets the banner
+	// that points at the terminal. Only one of the two is ever shown, because
+	// offering to answer here and telling you to answer elsewhere at the same
+	// time is worse than either.
+	if ask, ok := s.sm.AskOf(p.ID); ok {
+		out.Ask = &ask
+	} else if need, title := session.NeedsTerminal(s.sm.Tail(p.ID, 6000)); need {
 		out.NeedsTerminal = true
 		out.PromptTitle = title
 		out.PromptText = session.PromptTail(s.sm.Tail(p.ID, 6000), 14)

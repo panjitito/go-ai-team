@@ -320,6 +320,61 @@ new Promise(async resolve => {
 	}
 }
 
+// TestUIAskPanel renders a permission prompt and asserts it is answerable.
+//
+// The panel is fed a question directly rather than waiting for a real agent to
+// ask one: the parser is tested against captured terminals in
+// internal/session, and what needs checking here is the other half — that the
+// options become buttons, that the one the CLI has selected is marked, that a
+// four-sentence label does not blow the layout out, and that the panel goes
+// away when the question does.
+func TestUIAskPanel(t *testing.T) {
+	const port = 7803
+	startServer(t, port)
+
+	c := launchChrome(t)
+	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
+
+	if ready := c.evalString(t, `
+new Promise(async resolve => {
+  for (let i = 0; i < 60; i++) {
+    if (typeof renderAsk === 'function') return resolve('ready');
+    await new Promise(r => setTimeout(r, 250));
+  }
+  resolve('timeout');
+})`); ready != "ready" {
+		t.Fatalf("the UI never finished loading: %s", ready)
+	}
+
+	got := c.evalString(t, `(() => {
+  const host = document.createElement('div');
+  host.id = 'chatBanner';
+  document.querySelector('#main').append(host);
+  const ask = { question: 'Do you want to create hello.txt?', cancel: true, options: [
+    { number: 1, label: 'Yes', selected: false },
+    { number: 2, label: 'Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)', selected: true },
+    { number: 3, label: 'No', selected: false },
+  ]};
+  renderAsk({ ask }, 'ses_test');
+  const opts = [...host.querySelectorAll('.ask-opt')];
+  if (opts.length !== 3) return 'WRONG COUNT ' + opts.length;
+  if (!host.textContent.includes('create hello.txt?')) return 'QUESTION MISSING';
+  if (!opts[1].classList.contains('selected')) return 'SELECTION NOT MARKED';
+  if (opts[0].classList.contains('selected')) return 'WRONG ROW MARKED';
+  if (!opts[2].classList.contains('no')) return 'DECLINE NOT MARKED';
+  if (opts[0].querySelector('.ask-num').textContent !== '1') return 'NUMBER MISSING';
+  if (host.scrollWidth > document.querySelector('#main').clientWidth + 2) return 'PANEL TOO WIDE';
+  renderAsk({}, 'ses_test');
+  if (host.querySelector('.ask-opt')) return 'PANEL STAYED UP';
+  if (host.style.display !== 'none') return 'PANEL NOT HIDDEN';
+  host.remove();
+  return 'ok';
+})()`)
+	if got != "ok" {
+		t.Errorf("ask panel: %s", got)
+	}
+}
+
 // TestUIPanelsOpen asserts every topbar panel opens and renders content.
 func TestUIPanelsOpen(t *testing.T) {
 	const port = 7801

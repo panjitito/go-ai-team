@@ -31,20 +31,27 @@ import (
 // configured.
 type StatusLine struct {
 	Model string `json:"model,omitempty"`
+	// Mode is the permission mode: auto, manual, acceptEdits or plan. The CLI
+	// prints it above the composer, next to the shift+tab hint that changes it.
+	Mode string `json:"mode,omitempty"`
 	// Context is the percentage of the context window in use.
-	Context int `json:"context,omitempty"`
+	Context int `json:"context"`
 	// FiveHour and Weekly are the percentages of each rate-limit window spent.
-	FiveHour int `json:"fiveHour,omitempty"`
-	Weekly   int `json:"weekly,omitempty"`
+	FiveHour int `json:"fiveHour"`
+	Weekly   int `json:"weekly"`
 	// Cost is the session's spend in dollars.
-	Cost float64 `json:"cost,omitempty"`
+	Cost float64 `json:"cost"`
 
 	// Has* say whether the number above was actually found, so a genuine zero
 	// is not confused with "not shown". A fresh window really is 0%.
-	HasContext  bool `json:"hasContext,omitempty"`
-	HasFiveHour bool `json:"hasFiveHour,omitempty"`
-	HasWeekly   bool `json:"hasWeekly,omitempty"`
-	HasCost     bool `json:"hasCost,omitempty"`
+	//
+	// None of these carry omitempty, and neither do the numbers. That would undo
+	// the entire point of the pair: a real $0.00 would be dropped from the JSON,
+	// arrive as undefined next to a hasCost of true, and render as "$NaN".
+	HasContext  bool `json:"hasContext"`
+	HasFiveHour bool `json:"hasFiveHour"`
+	HasWeekly   bool `json:"hasWeekly"`
+	HasCost     bool `json:"hasCost"`
 }
 
 var (
@@ -72,6 +79,7 @@ func ParseStatusLine(tail string) StatusLine {
 		// Title-case the family so "haiku 4.5" and "Haiku 4.5" read the same.
 		s.Model = strings.ToUpper(m[1][:1]) + strings.ToLower(m[1][1:]) + " " + m[2]
 	}
+	s.Mode = ParseMode(tail)
 	if m := lastMatch(clean, slContext); m != nil {
 		s.Context, s.HasContext = atoi(m[1]), true
 	}
