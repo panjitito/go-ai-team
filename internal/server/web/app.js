@@ -1338,6 +1338,8 @@ async function openSettings() {
     el('input', { type: 'text', id: 'setBin', value: st.claudeBin || '', placeholder: 'claude (found on PATH)' }),
     el('div', { class: 'hint', text: 'Leave empty unless the CLI lives somewhere PATH does not reach.' }),
 
+    alertsSection(),
+
     el('div', { class: 'hint', style: 'margin-top:18px;padding-top:12px;border-top:1px solid var(--line)' },
       'The cascade, in order: agent override → project pin → nearest folder that pins an account → global default → ~/.claude.'));
 
@@ -1415,6 +1417,7 @@ function connectEvents() {
       if (S.view === 'grid') renderMain();
       renderTopbar(); renderStatus(); renderSidebar();
       updateWaitingCount();
+      alertScan();
       paintActivity();
       return;
     }
@@ -1464,6 +1467,7 @@ function connectEvents() {
     }
 
     updateWaitingCount();
+    alertScan();
 
     if (S.view === 'grid') renderMain();
     if (S.view === 'term') updateTermTokens();

@@ -776,10 +776,30 @@ func (m *Manager) refresh(s *Session) {
 // an answer. So an agent that produced output and has since been quiet, with no
 // new tokens landing on disk, is waiting rather than working.
 func (m *Manager) refreshStatus(s *Session) {
+	changed := m.decideStatus(s)
+	if !changed {
+		return
+	}
+	// Nothing else announces this.
+	//
+	// The UI has no timer of its own; it draws what the last event said. Token
+	// counters arrive while an agent is producing them and stop when it stops,
+	// so the final one to arrive before a quiet finish always says "working" —
+	// and with no event for the flip that followed, the spinner ran until some
+	// unrelated click forced a reload. An agent that had finished ten minutes
+	// ago still read as busy, on the board and in the project tree.
+	//
+	// s.Public takes the same lock decideStatus just released, so it is called
+	// from out here rather than inside it.
+	m.emit(Event{Type: "session.status", SessionID: s.ID, AgentID: s.AgentID, Payload: s.Public()})
+}
+
+// decideStatus applies the silence heuristic and says whether it moved.
+func (m *Manager) decideStatus(s *Session) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.terminal() || s.lastOut.IsZero() {
-		return
+		return false
 	}
 
 	// Silence is the signal, and it is a sharp one.
@@ -809,10 +829,13 @@ func (m *Manager) refreshStatus(s *Session) {
 	switch {
 	case s.Status == StatusWorking && quiet >= idleAfter:
 		s.Status = StatusWaiting
+		return true
 	case s.Status == StatusWaiting && quiet < idleAfter:
 		// Drawing again: it is thinking again.
 		s.Status = StatusWorking
+		return true
 	}
+	return false
 }
 
 // idleAfter is how long the terminal must be silent before a turn counts as
