@@ -148,6 +148,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/doctor", s.doctor)
 	mux.HandleFunc("GET /api/fs/list", s.listDir)
 	mux.HandleFunc("GET /api/files/tree", s.fileTree)
+	mux.HandleFunc("GET /api/worktrees", s.listWorktrees)
+	mux.HandleFunc("POST /api/worktrees/remove", s.removeWorktree)
 	mux.HandleFunc("GET /api/files/find", s.findFiles)
 	mux.HandleFunc("GET /api/files/read", s.readFile)
 	mux.HandleFunc("PUT /api/files/write", s.writeFile)
@@ -697,6 +699,7 @@ type patchAgentReq struct {
 	Model     *string            `json:"model"`
 	ExtraArgs *string            `json:"extraArgs"`
 	Env       *map[string]string `json:"env"`
+	Worktree  *bool              `json:"worktree"`
 }
 
 func (s *Server) patchAgent(w http.ResponseWriter, r *http.Request) {
@@ -726,6 +729,9 @@ func (s *Server) patchAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Env != nil {
 			a.Env = *req.Env
+		}
+		if req.Worktree != nil {
+			a.Worktree = *req.Worktree
 		}
 	})
 	if err != nil {
@@ -787,12 +793,21 @@ func (s *Server) startAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, sess.Public())
 		return
 	}
+	// A checkout of its own, when the agent asked for one. Several agents on one
+	// repository otherwise edit the same files.
+	cwd, branch, err := s.agentWorkdir(r.Context(), a, p)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+
 	sess, err := s.sm.Spawn(session.SpawnOpts{
 		Kind:      session.KindAgent,
 		AgentID:   a.ID,
 		ProjectID: a.ProjectID,
 		Provider:  a.Provider,
-		CWD:       p.Path,
+		CWD:       cwd,
+		Branch:    branch,
 		Args:      s.sm.AgentArgs(a),
 		Env:       a.Env,
 		Cols:      req.Cols,

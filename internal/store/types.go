@@ -111,6 +111,12 @@ type Agent struct {
 	ExtraArgs string            `json:"extraArgs,omitempty"`
 	Env       map[string]string `json:"env,omitempty"`
 
+	// Worktree runs this agent in a git checkout of its own, on its own branch,
+	// instead of in the project directory. Several agents on one repository
+	// otherwise edit the same files, and one's half-finished change becomes
+	// another's starting point.
+	Worktree bool `json:"worktree,omitempty"`
+
 	CreatedAt time.Time `json:"createdAt"`
 }
 

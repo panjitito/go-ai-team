@@ -247,15 +247,40 @@ func (c *chrome) evalString(t *testing.T, expr string) string {
 // app so the test exercises the same code a user would.
 func startServer(t *testing.T, port int) {
 	t.Helper()
-	exe := "../../go-ai-team.exe"
-	if _, err := os.Stat(exe); err != nil {
-		exe = "../../go-ai-team"
-		if _, err := os.Stat(exe); err != nil {
-			t.Skip("build the binary first: go build -o go-ai-team.exe .")
+	// The dev build first, when there is one.
+	//
+	// Windows locks a running executable, so `go build -o go-ai-team.exe` fails
+	// outright while somebody is using the app — and somebody using the app is
+	// the normal case on the machine this is developed on. Building to
+	// go-ai-team-dev.exe instead leaves their copy alone, and the tests then have
+	// to prefer the new binary or they would be checking yesterday's.
+	exe := ""
+	for _, c := range []string{
+		"../../go-ai-team-dev.exe", "../../go-ai-team-dev",
+		"../../go-ai-team.exe", "../../go-ai-team",
+	} {
+		if _, err := os.Stat(c); err == nil {
+			exe = c
+			break
 		}
+	}
+	if exe == "" {
+		t.Skip("build the binary first: go build -o go-ai-team-dev.exe .")
 	}
 	abs, _ := filepath.Abs(exe)
 	cmd := exec.Command(abs, "--port", fmt.Sprint(port), "--browser", "none")
+
+	// A state directory of its own.
+	//
+	// The app keeps its state under the home directory, so without this a test
+	// server shares one with whatever the person running the tests has open —
+	// two processes writing the same state file, over their real accounts and
+	// projects. Nothing here means to change any of that, but "means to" is not
+	// a safety property, and a test suite is not entitled to somebody's live
+	// configuration.
+	home := t.TempDir()
+	cmd.Env = append(os.Environ(), "USERPROFILE="+home, "HOME="+home)
+
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("could not start the server: %v", err)
 	}
@@ -580,6 +605,91 @@ new Promise(async resolve => {
 })()`)
 	if got != "ok" {
 		t.Errorf("needs-you marking: %s", got)
+	}
+}
+
+// TestUIWorktreePanel lists the checkouts and guards the one destructive button.
+//
+// The server side is covered end to end against real git and real agents; what
+// needs a browser is the panel's judgement: that the project's own checkout is
+// never offered for deletion, that a tree an agent is still running in is not
+// either, and that a tree the app did not make is shown but not owned.
+func TestUIWorktreePanel(t *testing.T) {
+	const port = 7811
+	startServer(t, port)
+
+	c := launchChrome(t)
+	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
+
+	if ready := c.evalString(t, `
+new Promise(async resolve => {
+  for (let i = 0; i < 60; i++) {
+    if (typeof paintWorktrees === 'function') return resolve('ready');
+    await new Promise(r => setTimeout(r, 250));
+  }
+  resolve('timeout');
+})`); ready != "ready" {
+		t.Fatalf("the UI never finished loading: %s", ready)
+	}
+
+	got := c.evalString(t, `
+new Promise(async resolve => {
+  const rows = [
+    { path: 'C:/proj', branch: 'main', main: true, running: false },
+    { path: 'C:/state/worktrees/p/a1', branch: 'agent/alpha-a1', main: false,
+      agentId: 'a1', agentName: 'Alpha', running: true },
+    { path: 'C:/state/worktrees/p/a2', branch: 'agent/beta-a2', main: false,
+      agentId: 'a2', agentName: 'Beta', running: false },
+    { path: 'C:/somewhere/else', branch: 'hand-made', main: false, running: false },
+  ];
+  const realApi = window.api;
+  window.api = async p => (String(p).startsWith('/worktrees') ? rows : realApi(p));
+  try {
+    await openWorktrees({ id: 'p', name: 'proj' });
+    await new Promise(r => setTimeout(r, 400));
+    const trs = [...document.querySelectorAll('.wt-table tr')];
+    const out = {
+      rows: trs.length,
+      text: trs.map(tr => tr.textContent.replace(/\s+/g, ' ').trim()),
+      removable: trs.map(tr => {
+        const b = tr.querySelector('button');
+        return !b ? 'none' : (b.disabled ? 'disabled' : 'enabled');
+      }),
+    };
+    resolve(JSON.stringify(out));
+  } finally {
+    window.api = realApi;
+  }
+})`)
+	t.Logf("worktrees: %s", got)
+
+	var r struct {
+		Rows      int      `json:"rows"`
+		Text      []string `json:"text"`
+		Removable []string `json:"removable"`
+	}
+	if err := json.Unmarshal([]byte(got), &r); err != nil {
+		t.Fatalf("unreadable: %v (%s)", err, got)
+	}
+	if r.Rows != 4 {
+		t.Fatalf("got %d rows, want 4", r.Rows)
+	}
+	// The project itself, an agent still running, an agent stopped, and one the
+	// app did not make. Only the third is ours to delete.
+	want := []string{"none", "disabled", "enabled", "none"}
+	for i, w := range want {
+		if r.Removable[i] != w {
+			t.Errorf("row %d (%s): remove is %q, want %q", i, r.Text[i], r.Removable[i], w)
+		}
+	}
+	if !strings.Contains(r.Text[0], "the project itself") {
+		t.Errorf("row 0 does not say it is the project: %q", r.Text[0])
+	}
+	if !strings.Contains(r.Text[1], "Alpha") || !strings.Contains(r.Text[1], "running") {
+		t.Errorf("row 1 does not name the agent and its state: %q", r.Text[1])
+	}
+	if !strings.Contains(r.Text[3], "unknown") {
+		t.Errorf("a tree the app did not make should say so: %q", r.Text[3])
 	}
 }
 

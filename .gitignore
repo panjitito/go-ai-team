@@ -3,6 +3,12 @@
 /go-ai-team.exe
 /dist/
 
+# the development build. Windows locks a running executable, so building over
+# go-ai-team.exe fails while the app is open — which on this machine it usually
+# is. This one is built instead, and the UI tests prefer it.
+/go-ai-team-dev
+/go-ai-team-dev.exe
+
 # local state (never commit: it lists account directories)
 /.goaiteam/
 /go-ai-team.exe~

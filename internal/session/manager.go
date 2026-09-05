@@ -72,10 +72,12 @@ type Session struct {
 	AccountName  string `json:"accountName"`
 	AccountColor string `json:"accountColor"`
 
-	CWD       string    `json:"cwd"`
-	Command   string    `json:"command"`
-	PID       int       `json:"pid"`
-	Status    Status    `json:"status"`
+	CWD     string `json:"cwd"`
+	Command string `json:"command"`
+	PID     int    `json:"pid"`
+	Status  Status `json:"status"`
+	// Branch is the worktree branch, when this session runs in one.
+	Branch    string    `json:"branch,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 	EndedAt   time.Time `json:"endedAt,omitempty"`
 	ExitCode  int       `json:"exitCode"`
@@ -254,6 +256,10 @@ type SpawnOpts struct {
 
 	// ResumeID resumes an existing CLI conversation instead of starting fresh.
 	ResumeID string
+	// Branch is the git branch the working directory is on, when it is a
+	// worktree of the project rather than the project itself. Display only: the
+	// checkout is already made by the time a session is spawned.
+	Branch string
 }
 
 // Spawn starts a CLI process in a PTY.
@@ -325,6 +331,11 @@ func (m *Manager) Spawn(o SpawnOpts) (*Session, error) {
 		return nil, err
 	}
 	s.resumeID = o.ResumeID
+	if o.Branch != "" {
+		s.mu.Lock()
+		s.Branch = o.Branch
+		s.mu.Unlock()
+	}
 	if res.Source != "" && res.Source != "explicit" {
 		s.mu.Lock()
 		s.SwitchLog = append(s.SwitchLog,
@@ -604,6 +615,10 @@ type PublicSession struct {
 	// only one of those is worth walking back to the desk for.
 	NeedsYou bool   `json:"needsYou"`
 	Question string `json:"question,omitempty"`
+
+	// Branch is set when the session runs in a worktree of its project rather
+	// than in the project directory, so the UI can say which one.
+	Branch string `json:"branch,omitempty"`
 }
 
 // Public snapshots the session for the API.
@@ -627,7 +642,7 @@ func (s *Session) Public() PublicSession {
 		SwitchCount:     s.SwitchCount, SwitchLog: logCopy,
 		Tokens: s.Tokens, TotalTokens: s.Tokens.Total(),
 		CacheHitRate: s.Tokens.CacheHitRate(), IdleSeconds: idle,
-		NeedsYou: s.needsYou, Question: s.question,
+		NeedsYou: s.needsYou, Question: s.question, Branch: s.Branch,
 	}
 }
 

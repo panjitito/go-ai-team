@@ -419,3 +419,121 @@ func ListFiles(ctx context.Context, dir string) ([]string, error) {
 	}
 	return files, nil
 }
+
+// Worktrees.
+//
+// Several agents on one repository trip over each other: they edit the same
+// files, and one's half-finished change becomes another's starting point. A
+// worktree gives each its own checkout and its own branch off the same history,
+// so they work in parallel and the results are merged deliberately rather than
+// by accident.
+//
+// The trees are created outside the repository. Inside it they would show up in
+// the file browser, in `git status`, and in every agent's view of the project —
+// a worktree is not part of the work.
+
+// Worktree is one checkout of a repository.
+type Worktree struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Head   string `json:"head"`
+	// Main is the original checkout, which is never one of ours to remove.
+	Main bool `json:"main"`
+}
+
+// ListWorktrees returns every checkout of a repository, the original first.
+func ListWorktrees(ctx context.Context, dir string) ([]Worktree, error) {
+	out, err := run(ctx, dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var (
+		list []Worktree
+		cur  Worktree
+	)
+	flush := func() {
+		if cur.Path != "" {
+			cur.Main = len(list) == 0
+			list = append(list, cur)
+		}
+		cur = Worktree{}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "":
+			flush()
+		case strings.HasPrefix(line, "worktree "):
+			flush()
+			cur.Path = filepath.Clean(strings.TrimPrefix(line, "worktree "))
+		case strings.HasPrefix(line, "HEAD "):
+			cur.Head = strings.TrimPrefix(line, "HEAD ")
+		case strings.HasPrefix(line, "branch "):
+			cur.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
+		}
+	}
+	flush()
+	return list, nil
+}
+
+// AddWorktree creates a checkout at path on a new branch, or reuses the one
+// already there.
+//
+// Reuse is the normal case, not an edge: an agent restarted tomorrow should find
+// yesterday's work, not a fresh branch beside it. A branch can only be checked
+// out in one worktree at a time, so creating a second on the same name fails —
+// which is exactly the right answer, and is why an existing tree is returned
+// rather than worked around.
+func AddWorktree(ctx context.Context, dir, path, branch string) (Worktree, error) {
+	existing, err := ListWorktrees(ctx, dir)
+	if err != nil {
+		return Worktree{}, err
+	}
+	want := filepath.Clean(path)
+	for _, wt := range existing {
+		if strings.EqualFold(wt.Path, want) {
+			return wt, nil
+		}
+	}
+
+	// A branch that exists already is checked out rather than recreated, so a
+	// tree removed and asked for again picks its history back up.
+	args := []string{"worktree", "add"}
+	if branchExists(ctx, dir, branch) {
+		args = append(args, path, branch)
+	} else {
+		args = append(args, "-b", branch, path)
+	}
+	if _, err := run(ctx, dir, args...); err != nil {
+		return Worktree{}, err
+	}
+
+	list, err := ListWorktrees(ctx, dir)
+	if err != nil {
+		return Worktree{}, err
+	}
+	for _, wt := range list {
+		if strings.EqualFold(wt.Path, want) {
+			return wt, nil
+		}
+	}
+	return Worktree{Path: want, Branch: branch}, nil
+}
+
+func branchExists(ctx context.Context, dir, branch string) bool {
+	_, err := run(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	return err == nil
+}
+
+// RemoveWorktree deletes a checkout. Without force, git refuses one holding
+// uncommitted work, and that refusal is passed straight through: an agent's
+// unmerged changes are not ours to throw away on a stray click.
+func RemoveWorktree(ctx context.Context, dir, path string, force bool) error {
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, path)
+	_, err := run(ctx, dir, args...)
+	return err
+}

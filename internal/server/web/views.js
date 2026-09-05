@@ -306,6 +306,10 @@ async function viewReview(main) {
         `${a ? a.name : id} (${n})`);
     }),
     el('span', { style: 'flex:1' }),
+    el('button', {
+      class: 'btn sm', id: 'wtBtn', title: 'Agents running in checkouts of their own',
+      onclick: () => openWorktrees(p),
+    }, 'Worktrees'),
     el('button', { class: 'btn sm', onclick: () => openCommit(p, st) }, 'Commit…'));
   main.append(bar);
 

@@ -429,6 +429,12 @@ function agentCard(a) {
             el('span', { class: 'dot ' + status }), status),
       el('span', { class: 'pill', title: `account resolved from: ${res.source || 'n/a'}` },
         el('span', { class: 'acct-dot', style: `background:${effColor}` }), effName),
+      sess && sess.branch
+        ? el('span', { class: 'pill', title: 'Running in its own worktree on this branch' },
+            '⎇ ' + sess.branch)
+        : (!sess && a.worktree
+            ? el('span', { class: 'pill', title: 'Will run in a git worktree of its own' }, '⎇ worktree')
+            : null),
       sess && sess.switchCount
         ? el('span', { class: 'pill warn', title: (sess.switchLog || []).join('\n') },
             `↻ ${sess.switchCount} switch${sess.switchCount > 1 ? 'es' : ''}`)
@@ -774,6 +780,12 @@ function agentForm(a, project) {
         x.name + (x.signedIn ? '' : ' — signed out, agents will fail')))),
     el('div', { class: 'hint', text: 'An override applies to this agent alone. Two agents in one project can run on two different accounts at the same time.' }),
 
+    el('label', { text: 'Working directory' }),
+    el('label', { class: 'switch' },
+      el('input', { type: 'checkbox', id: 'aWorktree', checked: a && a.worktree ? 'checked' : null }),
+      'Give this agent a git worktree of its own'),
+    el('div', { class: 'hint', text: 'Its own checkout on its own branch, off the same history. Several agents in one repository otherwise edit the same files, and one’s half-finished change becomes another’s starting point. Merge the branch when you are happy with it. Ignored where the project is not a git repository.' }),
+
     el('label', { text: 'Extra CLI flags' }),
     el('input', { type: 'text', id: 'aArgs', value: a ? (a.extraArgs || '') : '',
       placeholder: '--model opus-4.8  --append-system-prompt "be terse"' }),
@@ -787,6 +799,7 @@ function readAgentForm() {
     model: $('#aModel').value,
     accountId: $('#aAcct').value,
     extraArgs: $('#aArgs').value.trim(),
+    worktree: $('#aWorktree').checked,
   };
 }
 
