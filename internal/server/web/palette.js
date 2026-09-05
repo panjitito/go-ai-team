@@ -147,13 +147,26 @@ function paintPalette(query) {
     a.it.title.localeCompare(b.it.title));
 
   PALETTE.items = hits.slice(0, 40).map(h => h.it);
+
+  // Whatever was typed is also a thing to look for. Somewhere near half the
+  // time the answer is not "go to that agent" but "what did it say about this",
+  // and the palette is where the hands already are.
+  if (q) {
+    PALETTE.items.push({
+      kind: 'search', urgency: 9,
+      title: 'Search conversations', note: '“' + query.trim() + '”',
+      run: () => openFind(query.trim()),
+    });
+  }
   PALETTE.active = 0;
 
   const list = $('#palList');
   list.innerHTML = '';
-  if (!PALETTE.items.length) {
+  // Nothing here by that name still deserves saying — but with the offer to go
+  // and look for it in what the agents actually said, which is where a word the
+  // app has never heard of usually lives.
+  if (!hits.length) {
     list.append(el('div', { class: 'pal-empty', text: 'Nothing matches that.' }));
-    return;
   }
   PALETTE.items.forEach((it, i) => {
     list.append(el('div', {

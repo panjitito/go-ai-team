@@ -92,12 +92,14 @@ new Promise(async resolve => {
     await sleep(80);
     out.panel = rows()[0] && rows()[0].title;
 
-    // Nonsense matches nothing, and says so rather than showing everything.
+    // Nonsense matches nothing, and says so rather than showing everything —
+    // but still offers to go and look for it in what the agents said.
     input.value = 'zzzzqqq';
     input.dispatchEvent(new Event('input'));
     await sleep(80);
-    out.emptyRows = rows().length;
+    out.emptyKinds = rows().map(r => r.kind);
     out.emptyMsg = !!document.querySelector('.pal-empty');
+    out.searchNote = (rows()[0] || {}).note;
 
     // Arrow keys move, Enter goes there.
     input.value = 'reviewer';
@@ -162,8 +164,9 @@ new Promise(async r => {
 		NeedsNote        string   `json:"needsNote"`
 		Fuzzy            []string `json:"fuzzy"`
 		Panel            string   `json:"panel"`
-		EmptyRows        int      `json:"emptyRows"`
+		EmptyKinds       []string `json:"emptyKinds"`
 		EmptyMsg         bool     `json:"emptyMsg"`
+		SearchNote       string   `json:"searchNote"`
 		BeforeEnter      string   `json:"beforeEnter"`
 		ClosedAfterEnter bool     `json:"closedAfterEnter"`
 		Started          string   `json:"started"`
@@ -194,9 +197,14 @@ new Promise(async r => {
 	if r.Panel != "MCP servers" {
 		t.Errorf("\"mcp\" found %q", r.Panel)
 	}
-	if r.EmptyRows != 0 || !r.EmptyMsg {
-		t.Errorf("nonsense gave %d rows (message=%v); it should say nothing matches",
-			r.EmptyRows, r.EmptyMsg)
+	// Nothing by that name, said plainly, plus the one thing still worth doing
+	// with a word the app has never heard of.
+	if len(r.EmptyKinds) != 1 || r.EmptyKinds[0] != "search" || !r.EmptyMsg {
+		t.Errorf("nonsense gave rows %v (message=%v); want just the search offer",
+			r.EmptyKinds, r.EmptyMsg)
+	}
+	if !strings.Contains(r.SearchNote, "zzzzqqq") {
+		t.Errorf("the search row does not carry what was typed: %q", r.SearchNote)
 	}
 	if r.BeforeEnter != "Reviewer" {
 		t.Errorf("before Enter the highlight was on %q", r.BeforeEnter)

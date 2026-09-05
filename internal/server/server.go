@@ -154,6 +154,7 @@ func (s *Server) Handler() http.Handler {
 
 	// --- settings, misc ---
 	mux.HandleFunc("GET /api/activity", s.listActivity)
+	mux.HandleFunc("GET /api/search", s.search)
 
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PATCH /api/settings", s.patchSettings)
