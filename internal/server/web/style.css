@@ -789,6 +789,30 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 .chat-empty { text-align: center; padding: 60px 20px; color: var(--fg-mute); }
 .chat-empty-title { font-size: 15px; color: var(--fg-dim); margin-bottom: 6px; }
 
+/* ---- @ path completion ---- */
+
+.mention-menu {
+  position: fixed; z-index: 160; max-height: 260px; overflow: auto;
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: 9px; padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.mention-item {
+  display: flex; align-items: baseline; gap: 8px; text-align: left;
+  background: none; border: 0; cursor: pointer; font: inherit;
+  padding: 5px 9px; border-radius: 6px; color: var(--fg-dim);
+  overflow: hidden; white-space: nowrap;
+}
+.mention-item:hover, .mention-item.active { background: var(--bg-3); color: var(--fg); }
+.mention-name { font-family: var(--mono); font-size: 12px; flex: none; }
+/* The directory is context, not the answer: it is what tells two files with the
+   same name apart, and nothing more. */
+.mention-dir {
+  color: var(--fg-mute); font-size: 11px; overflow: hidden;
+  text-overflow: ellipsis; direction: rtl; text-align: left;
+}
+
 /* ---- composer ---- */
 
 .composer {

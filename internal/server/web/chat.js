@@ -185,6 +185,9 @@ function composer(sessionId) {
     box.style.height = Math.min(box.scrollHeight, 180) + 'px';
   });
   wireAttachments(box, sessionId);
+  // "@" completes a path from this project's files.
+  const sess = sessionById(sessionId);
+  wireMentions(box, sess && sess.projectId);
 
   return el('div', { class: 'composer-wrap' },
     runBarEl(sessionId),

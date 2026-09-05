@@ -46,6 +46,10 @@ func (m *Manager) SendCommand(sessionID, text string) error {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 
+	s.mu.Lock()
+	quietSince := s.lastOut
+	s.mu.Unlock()
+
 	if err := m.Write(s.ID, []byte(pasteStart+text+pasteEnd)); err != nil {
 		return err
 	}
@@ -84,14 +88,20 @@ func (m *Manager) SendCommand(sessionID, text string) error {
 		}
 	}
 
-	if deliveryState(m.Tail(s.ID, tailWindow), text) == deliveryTyped {
+	// Still on the prompt line is not enough to call it a failure. Several of
+	// these commands leave their own text on screen after acting — /help draws a
+	// panel with "❯ /help" still above it — and reporting an error over a command
+	// that plainly worked is worse than saying nothing.
+	//
+	// Silence is the tell. A CLI that took the command redraws: the panel, the
+	// confirmation line, at minimum the status line. One that is not listening
+	// produces nothing at all, and that is the only case worth an error.
+	s.mu.Lock()
+	silent := s.lastOut.Equal(quietSince)
+	s.mu.Unlock()
+	if silent && deliveryState(m.Tail(s.ID, tailWindow), text) == deliveryTyped {
 		return fmt.Errorf("%q is typed into the agent's terminal but the CLI has not taken it. Open the Terminal tab and press Enter", text)
 	}
-	// Never seen on the prompt line at all. Most likely consumed before the
-	// first look — these are handled instantly — so this is not called a
-	// failure. The bar reads its state back from the CLI either way, so a
-	// command that truly went nowhere shows up as nothing having changed rather
-	// than as a wrong answer.
 	return nil
 }
 

@@ -395,3 +395,27 @@ func runAllowExit(ctx context.Context, dir string, allow int, args ...string) (s
 	}
 	return "", -1, err
 }
+
+// ListFiles returns every file git knows about in the work tree, as
+// slash-separated paths relative to it.
+//
+// Tracked files plus untracked ones that are not ignored — which is the set a
+// person means by "the files in this project". Reading it from git rather than
+// walking the disk is both faster and, more usefully, free of node_modules,
+// build output and everything else .gitignore already excludes.
+func ListFiles(ctx context.Context, dir string) ([]string, error) {
+	out, err := run(ctx, dir,
+		"ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	// -z, because a filename may contain anything except NUL — including the
+	// newline that would otherwise split it in two.
+	var files []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			files = append(files, p)
+		}
+	}
+	return files, nil
+}

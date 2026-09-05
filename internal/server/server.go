@@ -148,6 +148,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/doctor", s.doctor)
 	mux.HandleFunc("GET /api/fs/list", s.listDir)
 	mux.HandleFunc("GET /api/files/tree", s.fileTree)
+	mux.HandleFunc("GET /api/files/find", s.findFiles)
 	mux.HandleFunc("GET /api/files/read", s.readFile)
 	mux.HandleFunc("PUT /api/files/write", s.writeFile)
 
