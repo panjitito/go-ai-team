@@ -77,6 +77,9 @@ point, since the alternative charges per month for a few hundred of them.
 | **A worktree each** | Several agents on one repository edit the same files, and one's half-finished change silently becomes another's starting point. Switch it on per agent and each gets its own git checkout on its own branch off the same history — working in parallel, merged deliberately. The trees live in the app's state directory, not inside the repo, so they never appear in the file browser or in `git status`. Review → Worktrees lists them; removing one asks git first, and git refuses to throw away uncommitted work. |
 | **Activity in the tree** | A project's badge says what its agents are doing, not just how many there are: working pulses, waiting-on-you is steady and bright, running-but-idle is a quiet dot, and the moment the last one stops working it flashes green once and settles. That last one is a transition, so it is the thing nothing could report before — you had to be watching. Collapsed, the ☰ carries the same summary. |
 | **Collapse the panel** | The projects panel is 268px of a window that is mostly conversation, and you only need it while switching project. ☰ or Ctrl-B hides it and gives the space to the work; the choice is remembered per browser, because a phone and a desktop want different answers. On a phone the same button opens it as an overlay, which is what it already did. |
+| **Go to anything** | Ctrl-K lists every agent, project, panel and view and filters as you type. Agents first and carrying their state, because "which one wanted me" is the question being asked most of the time: one waiting on an answer sorts above one that is working, which sorts above one that is idle. Matching is a subsequence, so `bkw` finds *Backend worker* without anyone having to remember the words. The topbar carries the button with its key printed beside it — a shortcut nobody can see is a shortcut nobody uses. |
+| **Desktop alerts** | The point of running eight agents is that you are not watching any of them, and the only way to learn that one had stopped to ask something was to come back and look. A notification and a short chime when an agent asks, when a session dies, and — if you ask for it — when a turn finishes. Off until switched on in Settings, because a permission prompt nobody invited is its own kind of rude, and silent while the window is in front of you. A wave arrives as one line: sending the same prompt to six agents ends six turns at once, and six notifications up the side of the screen get dismissed unread. |
+| **The keyboard, written down** | `?` opens the list of shortcuts — but only when it is a question and not a character being typed. A test reads the handlers and fails if the list has stopped matching them. |
 | **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
 | **Live terminals** | Real PTYs over websocket into xterm.js, 256KB scrollback replayed on attach. |
 | **Morph** | Change a running agent's role in place, keeping its conversation. Optional "fresh eyes". |
@@ -116,6 +119,8 @@ point, since the alternative charges per month for a few hundred of them.
 | **Statistics** | Tokens per agent and per account, cache rates, minutes, switches. |
 | **Adaptive model** | Reads the prompt before you send it and suggests the cheapest model that will do the job. |
 | **Process guard** | Finds child processes that are large, old AND idle at once. Nothing is ended unless you ask. |
+| **Search every conversation** | Ctrl-Shift-F over everything the agents have ever said — every message, every tool call, every result. Before this, an answer you did not remember the location of was gone. 2.3GB across 1,127 transcripts here, read in 2.7 seconds by four readers at once, because the scan is a raw substring match over the bytes and JSON is parsed only for the lines that already matched. It searches the subagents too, which are 858 of those files and where most of the detail is. The footer says how much was actually read: "nothing found" and "nothing found in the part I had time for" are different answers. |
+| **What happened while you were out** | An Activity tab: started, asked, finished, handed over at a quota limit, died — with the time, the agent and the project. Kept by the server rather than the page, because the hours worth reading about are the ones when nobody had it open. Token counters are not in it; every busy agent emits one every few seconds and they would be the only thing there. |
 
 ### Environment
 | | |
@@ -418,7 +423,7 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-104 tests. Covered: the cwd encoder against real transcript directories, the
+181 tests in the fast suite and 15 more behind the UI tag. Covered: the cwd encoder against real transcript directories, the
 cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth
@@ -453,6 +458,12 @@ that review had not caught. Each keeps its own evidence:
 - **A transcript is read incrementally, and only its tail.** A real one here was
   257MB. Parsing it whole cost 762ms per poll and 1.24s per 1.5s refresh; now it
   is 0ms and ~100ms.
+- **The end of a turn has to be announced.** The page keeps no timer of its own;
+  it draws what the last event said. Token counters arrive while an agent is
+  producing them and stop when it stops, so the last one before a quiet finish
+  always said "working" — and with nothing emitted for the flip that followed,
+  the spinner ran on the board and in the project tree until an unrelated click
+  forced a reload. An agent that had finished ten minutes ago still read as busy.
 
 Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
 checks including the failure cases, and an end-to-end automation run that fires
