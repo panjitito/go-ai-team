@@ -74,25 +74,34 @@ func NeedsTerminal(tail string) (bool, string) {
 	return true, "It is waiting for an answer in the terminal"
 }
 
-// PromptTail returns the readable last lines of a terminal, for showing the
-// question inline without making the person switch views to read it.
+// PromptTail returns what is on the terminal now, for showing the question
+// inline without making the person switch views to read it.
+//
+// Rendered rather than filtered. This used to strip the escape sequences and
+// keep the last few distinct lines, which for anything but the simplest prompt
+// produced a wall of spinner frames with the actual question crushed onto one
+// line at the end — the rewind picker came out as
+//
+//	Restore the code … before…Create./one.txtcontaining1.Nothingelse.one.txt +1Create./two.txt…❯ (current)Enter to continue
+//
+// which is unreadable, and this text exists to be read. Drawing the frame onto a
+// grid gives back the rows the CLI actually put on screen.
 func PromptTail(tail string, lines int) string {
-	clean := stripANSI(tail)
-	clean = strings.ReplaceAll(clean, "\r", "\n")
-	var kept []string
-	var prev string
-	for _, l := range strings.Split(clean, "\n") {
-		l = strings.TrimRight(l, " \t")
-		if strings.TrimSpace(l) == "" || l == prev {
+	rows := Screen(tail)
+	if len(rows) > lines {
+		rows = rows[len(rows)-lines:]
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		// The box rules are the widest thing on screen and say nothing; without
+		// trimming them every line of this wraps.
+		t := strings.TrimRight(r.Text, " ")
+		if strings.Trim(t, "─╌—-") == "" {
 			continue
 		}
-		prev = l
-		kept = append(kept, l)
+		out = append(out, t)
 	}
-	if len(kept) > lines {
-		kept = kept[len(kept)-lines:]
-	}
-	return strings.Join(kept, "\n")
+	return strings.Join(out, "\n")
 }
 
 // Tail returns the recent terminal bytes for prompt detection.

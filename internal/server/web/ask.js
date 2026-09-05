@@ -106,6 +106,26 @@ async function answerAsk(sessionId, n, btn) {
   }
 }
 
+// openRewind puts the CLI's own rewind picker on screen.
+//
+// A hand-off, not a reimplementation, and that is the point rather than a
+// shortcut. The picker is an arrow-key list, not a numbered box, so it cannot
+// become buttons the way a permission prompt can — and what it does is restore
+// your files to an earlier point. Choosing the wrong row loses work. The CLI's
+// own list, driven by the person, is the version of this worth having; all this
+// does is save typing the command and switching tab.
+async function openRewind(sessionId) {
+  S.chatMode = 'term';
+  applyChatMode(sessionId);
+  try {
+    await api(`/sessions/${sessionId}/command`, { method: 'POST', body: { text: '/rewind' } });
+  } catch (e) {
+    toast(e.message, 'bad');
+    return;
+  }
+  toast('Pick a point with the arrow keys, then Enter', 'ok');
+}
+
 // interruptSession stops the current turn and leaves the session running.
 //
 // The missing half of Stop. Stop kills the process and takes the conversation

@@ -161,6 +161,10 @@ function chatHeader(sess, title) {
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Change role, keep the conversation', onclick: () => morphAgent(sess) }, '⟳') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Fork a twin with this conversation', onclick: () => forkAgent(sess) }, '⑃') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Run on another account', onclick: () => manualSwitch(sess) }, '↻') : null,
+    conversational(sess) ? el('button', {
+      class: 'btn ghost sm', title: 'Rewind — restore the code and conversation to an earlier point',
+      onclick: () => openRewind(sessionId),
+    }, '⟲') : null,
     // Interrupt is not Stop, and putting them side by side is the point: one
     // ends the turn, the other ends the session. It only appears while there is
     // a turn to interrupt.
