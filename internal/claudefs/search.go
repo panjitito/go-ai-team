@@ -36,9 +36,15 @@ type Hit struct {
 	// SessionID is the CLI's own conversation id, taken from the file name.
 	SessionID string `json:"sessionId"`
 	// Dir is the account directory the conversation lives in, and Project is the
-	// working directory it ran in.
+	// name of the directory the transcripts sit in — the working path with its
+	// separators flattened, which nobody can read.
 	Dir     string `json:"dir"`
 	Project string `json:"project"`
+	// CWD is the working directory the conversation actually ran in, read from
+	// the record rather than reversed out of the directory name. The flattening
+	// is not reversible — a folder called "mis-dashboard" and one called
+	// "mis/dashboard" encode identically — and this is on every line anyway.
+	CWD string `json:"cwd,omitempty"`
 	// Sub names the subagent whose own transcript this came from, empty when the
 	// hit is in the conversation itself.
 	Sub  string    `json:"sub,omitempty"`
@@ -327,12 +333,20 @@ func asciiLower(b []byte) {
 	}
 }
 
+// searchLine is a transcript record plus the two fields the conversation parser
+// has no use for and this does.
+type searchLine struct {
+	convLine
+	CWD string `json:"cwd"`
+}
+
 // hitFrom turns a matching line into a hit, or says the match was plumbing.
 func hitFrom(line, needle []byte, f transcript) (Hit, bool) {
-	var cl convLine
-	if err := json.Unmarshal(line, &cl); err != nil {
+	var sl searchLine
+	if err := json.Unmarshal(line, &sl); err != nil {
 		return Hit{}, false
 	}
+	cl := sl.convLine
 	role := cl.Message.Role
 	if role == "" {
 		role = cl.Type
@@ -349,6 +363,7 @@ func hitFrom(line, needle []byte, f transcript) (Hit, bool) {
 			SessionID: f.session,
 			Dir:       f.dir,
 			Project:   f.project,
+			CWD:       sl.CWD,
 			Sub:       f.sub,
 			When:      when,
 			Role:      role,

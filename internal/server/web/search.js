@@ -134,6 +134,11 @@ function findRow(h, q) {
       h.sub ? el('span', { class: 'pill', title: h.sub }, 'subagent') : null,
       el('span', { class: 'find-who', text: who }),
       when ? el('span', { class: 'find-when mono', text: whenLabel(when) }) : null,
+      // Which project, when the answer could have come from any of them. The
+      // conversation records the directory it ran in, so this is the real one
+      // and not a guess reversed out of a folder name.
+      h.projectName && FIND.scope !== 'project'
+        ? el('span', { class: 'find-proj', text: h.projectName, title: h.cwd || '' }) : null,
       h.account ? el('span', { class: 'find-acct', text: h.account }) : null,
       el('span', { class: 'spacer', style: 'flex:1' }),
       h.liveSession

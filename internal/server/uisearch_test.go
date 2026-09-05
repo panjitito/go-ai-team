@@ -57,7 +57,8 @@ new Promise(async resolve => {
           text: 'the ROUNDING was in the <tax> column, and the fix is one line.' },
         { sessionId: 'bbbbbbbb-2222', dir: 'C:/u/.claude-ep', sub: 'agent-a19',
           when: new Date(Date.now() - 3 * 86400000).toISOString(),
-          role: 'user', account: 'spare', snippet: 'please fix the rounding',
+          role: 'user', account: 'spare', projectName: 'Android',
+          cwd: 'C:/work/Android', snippet: 'please fix the rounding',
           text: 'please fix the rounding' },
       ],
     };
@@ -127,6 +128,11 @@ new Promise(async resolve => {
     setFindScope('all');
     await sleep(300);
     out.allQuery = asked[asked.length - 1];
+    // Searching everywhere, an answer has to say where it came from.
+    out.projsAll = [...document.querySelectorAll('.find-proj')].map(n => n.textContent);
+    setFindScope('project');
+    await sleep(300);
+    out.projsScoped = [...document.querySelectorAll('.find-proj')].length;
 
     // Escape closes it.
     document.querySelector('#findInput').dispatchEvent(new KeyboardEvent('keydown',
@@ -204,6 +210,8 @@ new Promise(async r => {
 		Opened            string   `json:"opened"`
 		ClosedAfterOpen   bool     `json:"closedAfterOpen"`
 		AllQuery          string   `json:"allQuery"`
+		ProjsAll          []string `json:"projsAll"`
+		ProjsScoped       int      `json:"projsScoped"`
 		EscClosed         bool     `json:"escClosed"`
 		EmptyMsg          bool     `json:"emptyMsg"`
 		EmptyFoot         string   `json:"emptyFoot"`
@@ -271,6 +279,14 @@ new Promise(async r => {
 	}
 	if strings.Contains(r.AllQuery, "projectId") {
 		t.Errorf("Everywhere still asked for one project: %q", r.AllQuery)
+	}
+	// Across every project, a result has to say which one it came from — and
+	// inside one, saying it on every row is just noise.
+	if len(r.ProjsAll) != 1 || r.ProjsAll[0] != "Android" {
+		t.Errorf("project labels searching everywhere = %v", r.ProjsAll)
+	}
+	if r.ProjsScoped != 0 {
+		t.Errorf("%d project labels while scoped to one project", r.ProjsScoped)
 	}
 	if !r.EscClosed {
 		t.Error("Escape did not close it")

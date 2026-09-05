@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,8 @@ import (
 type searchHit struct {
 	claudefs.Hit
 	Account string `json:"account"`
+	// ProjectName is the directory the conversation ran in, named.
+	ProjectName string `json:"projectName,omitempty"`
 	// LiveSession is the app's own session id when that conversation is still
 	// open in a running agent, so the result can lead somewhere. Empty means the
 	// conversation is history.
@@ -99,13 +102,40 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		names[a.Dir] = a.Name
 	}
 
+	// Which project a hit came from, when the search was not confined to one.
+	// Keyed on the working directory the record carries, so a conversation from
+	// a folder the app has never been told about still gets a name.
+	projects := map[string]string{}
+	for _, p := range s.st.Projects() {
+		projects[strings.ToLower(filepath.Clean(p.Path))] = p.Name
+	}
+
 	for _, h := range res.Hits {
 		out.Hits = append(out.Hits, searchHit{
 			Hit:         h,
 			Account:     names[h.Dir],
+			ProjectName: projectLabel(projects, h.CWD),
 			LiveSession: live[h.SessionID],
 			AgentName:   agents[h.SessionID],
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// projectLabel names the directory a conversation ran in.
+//
+// A project the app knows gets the name it was given. One it does not — an old
+// conversation from a folder nobody added, or one added and since removed —
+// gets the folder's own name, which is still what a person calls it.
+//
+// Matched case-insensitively because this is Windows and the same directory
+// arrives spelled both ways.
+func projectLabel(known map[string]string, cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	if n, ok := known[strings.ToLower(filepath.Clean(cwd))]; ok {
+		return n
+	}
+	return filepath.Base(filepath.Clean(cwd))
 }
