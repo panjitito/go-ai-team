@@ -18,8 +18,7 @@ import (
 // is a tool call with its own input and result, and none of it depends on
 // parsing ANSI or guessing where a box drawing ended.
 //
-// Two things are deliberately dropped. `thinking` blocks are the model's private
-// reasoning and are not shown. And a user record whose content is nothing but
+// One thing is deliberately dropped: a user record whose content is nothing but
 // tool_result blocks is not a user turn at all — it is the machinery answering
 // the previous tool call, and rendering it as something the person said would be
 // actively misleading.
@@ -34,6 +33,12 @@ const (
 	// pasted image, so a message that was "look at this screenshot" reads as the
 	// screenshot rather than as an absolute path to it.
 	BlockImage BlockKind = "image"
+	// BlockThinking is the model's reasoning. Claude Code shows it, folded away
+	// behind a keystroke, and this was dropping it outright — which on a long
+	// silent stretch left the conversation with nothing on screen while the
+	// terminal one tab over was visibly full of it. Folded here too: it is
+	// context when you want it and noise when you do not.
+	BlockThinking BlockKind = "thinking"
 )
 
 // Block is one ordered piece of a message.
@@ -99,6 +104,9 @@ type convBlock struct {
 	ID    string          `json:"id"`
 	Name  string          `json:"name"`
 	Input json.RawMessage `json:"input"`
+
+	// thinking
+	Thinking string `json:"thinking"`
 
 	// tool_result
 	ToolUseID string          `json:"tool_use_id"`
@@ -259,8 +267,13 @@ func parseConversationTail(path string, limit int, window int64) ([]Message, boo
 					byToolID[b.ID] = tc
 					m := appendAssistant(when, l.Message.Model, l.UUID)
 					m.Blocks = append(m.Blocks, Block{Kind: BlockTool, Tool: tc})
+				case "thinking":
+					if strings.TrimSpace(b.Thinking) == "" {
+						continue
+					}
+					m := appendAssistant(when, l.Message.Model, l.UUID)
+					m.Blocks = append(m.Blocks, Block{Kind: BlockThinking, Text: b.Thinking})
 				}
-				// thinking is deliberately skipped.
 			}
 			continue
 		}
@@ -340,7 +353,16 @@ func summariseTool(name string, input json.RawMessage) string {
 		return str("query")
 	case "Task", "Agent":
 		return str("description")
+	case "TaskCreate":
+		return str("subject")
+	case "TaskUpdate":
+		// "task 3 → completed" says more than either half alone.
+		if id := str("taskId"); id != "" {
+			return "task " + id + " → " + strings.ReplaceAll(str("status"), "_", " ")
+		}
+		return strings.ReplaceAll(str("status"), "_", " ")
 	case "TodoWrite":
+		// Older builds. This CLI keeps its plan with TaskCreate/TaskUpdate above.
 		return "updating the todo list"
 	}
 	// Unknown tool: show the first string field, which is nearly always the

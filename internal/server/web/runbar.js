@@ -57,6 +57,13 @@ function runBarEl(sessionId) {
       onclick: e => modeMenu(e.currentTarget, sessionId),
     }, 'mode'),
     el('span', { class: 'rb-sep' }),
+    // The plan. Of everything on this strip it is the one that answers "what is
+    // this agent doing", which is the question you have when you look at it.
+    el('button', {
+      class: 'rb-btn rb-plan', id: 'rbPlan', style: 'display:none',
+      title: 'The agent’s plan',
+      onclick: e => planMenu(e.currentTarget),
+    }),
     el('span', { class: 'rb-stat', id: 'rbCtx', title: 'Context window used' }),
     el('span', { class: 'rb-stat', id: 'rbCost', title: 'Cost of this session' }),
     el('span', { style: 'flex:1' }),
@@ -95,6 +102,8 @@ function updateRunBar(d) {
     mode.classList.toggle('mode-loose', line.mode === 'acceptEdits');
   }
 
+  updatePlan(d.tasks || []);
+
   setStat('#rbCtx', line.hasContext, () => `ctx ${line.context}%`);
   setStat('#rbCost', line.hasCost, () => '$' + Number(line.cost).toFixed(2));
   setMeter('#rb5h', line.hasFiveHour, line.fiveHour);
@@ -120,6 +129,59 @@ function setMeter(sel, has, pct) {
   n.querySelector('.rb-meter-pct').textContent = v + '%';
   n.classList.toggle('warn', v >= 75 && v < 90);
   n.classList.toggle('hot', v >= 90);
+}
+
+// ----------------------------------------------------------------- plan
+
+// RUNBAR.tasks is the latest plan, kept so the popover can be built on click
+// rather than rebuilt on every poll under the pointer.
+RUNBAR.tasks = [];
+
+function updatePlan(tasks) {
+  RUNBAR.tasks = tasks;
+  const btn = $('#rbPlan');
+  if (!btn) return;
+  if (!tasks.length) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+
+  const done = tasks.filter(t => t.status === 'completed' || t.status === 'cancelled').length;
+  const on = tasks.find(t => t.status === 'in_progress');
+  const count = `${done}/${tasks.length}`;
+  // The step it is on, when there is one, because that is the answer to the
+  // question the plan is being consulted for.
+  const label = on ? `${count} · ${on.activeForm || on.subject}` : count;
+
+  btn.textContent = '';
+  btn.append(el('span', { class: 'rb-plan-count', text: '☑' }), el('span', { text: label }));
+  btn.classList.toggle('rb-plan-done', done === tasks.length);
+  btn.title = tasks.map(t => taskMark(t) + ' ' + t.subject).join('\n');
+}
+
+function taskMark(t) {
+  if (t.status === 'completed') return '✓';
+  if (t.status === 'cancelled') return '✗';
+  if (t.status === 'in_progress') return '▸';
+  return '·';
+}
+
+function planMenu(anchor) {
+  const items = RUNBAR.tasks.map(t => [
+    taskMark(t) + '  ' + t.subject,
+    () => {},
+    t.status === 'in_progress',
+    t.status === 'in_progress' ? t.activeForm : '',
+  ]);
+  if (!items.length) return;
+  rbMenu(anchor, items);
+  // Nothing here is a command — it is the plan, shown. Striking through what is
+  // finished says so faster than reading the marks.
+  const menu = document.querySelector('.rb-menu');
+  if (!menu) return;
+  menu.classList.add('rb-menu-plan');
+  [...menu.querySelectorAll('.rb-menu-item')].forEach((n, i) => {
+    const t = RUNBAR.tasks[i];
+    if (t && (t.status === 'completed' || t.status === 'cancelled')) n.classList.add('is-done');
+  });
 }
 
 // ---------------------------------------------------------------- menus

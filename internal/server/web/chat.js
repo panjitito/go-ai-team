@@ -427,9 +427,42 @@ function messageEl(m, openSet) {
   for (const b of m.blocks) {
     if (b.kind === 'text') bodyEl.append(MD.render(b.text));
     else if (b.kind === 'image') bodyEl.append(imageEl(b));
+    // An empty one is what the current CLI writes: the block is there, the
+    // reasoning is not, only a signature. A card with nothing in it is worse
+    // than no card.
+    else if (b.kind === 'thinking') { if ((b.text || '').trim()) bodyEl.append(thinkingEl(b, openSet)); }
     else if (b.tool) bodyEl.append(toolEl(b.tool, openSet));
   }
   return el('div', { class: 'msg ' + (isUser ? 'user' : 'assistant') }, head, bodyEl);
+}
+
+// thinkingEl renders the model's reasoning, folded.
+//
+// Claude Code shows it and keeps it behind a keystroke; this used to drop it
+// outright, so a long stretch of reasoning looked like nothing happening at all.
+// Folded, because it is context when you go looking and noise when you are
+// reading the answer — and the first line is enough to decide which.
+//
+// It reuses the tool card's open/closed set, so unfolding one survives the
+// repaint that lands a second later.
+function thinkingEl(b, openSet) {
+  const id = 'think:' + (b.text || '').length + ':' + (b.text || '').slice(0, 24);
+  const open = openSet.has(id);
+  const card = el('div', { class: 'tool think' + (open ? ' open' : ''), 'data-id': id });
+  card.append(
+    el('div', { class: 'tool-head', onclick: () => card.classList.toggle('open') },
+      el('span', { class: 'tool-icon', text: '✻' }),
+      el('span', { class: 'tool-name', text: 'thinking' }),
+      el('span', { class: 'tool-sum', text: firstSentence(b.text) }),
+      el('span', { style: 'flex:1' }),
+      el('span', { class: 'tool-chev', text: '▾' })),
+    el('div', { class: 'tool-detail' }, el('div', { class: 'think-body' }, MD.render(b.text))));
+  return card;
+}
+
+function firstSentence(s) {
+  const line = String(s || '').trim().split('\n').find(l => l.trim()) || '';
+  return line.length > 140 ? line.slice(0, 140) + '…' : line;
 }
 
 // imageEl renders a pasted image inside a message.

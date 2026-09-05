@@ -37,6 +37,12 @@ type conversationResp struct {
 
 	Status session.Status `json:"status"`
 
+	// Tasks is the agent's own plan, rebuilt from the TaskCreate/TaskUpdate calls
+	// in the transcript. The CLI shows this as it works and the app showed
+	// nothing, which across a row of agents is the difference between knowing
+	// what each one is doing and guessing.
+	Tasks []claudefs.Task `json:"tasks"`
+
 	// Line is what the CLI prints along the bottom of its own terminal: the
 	// model, how full the context is, the spend, and how much of the rate-limit
 	// windows has gone. Surfaced here so nobody has to switch tabs to read it.
@@ -68,6 +74,7 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 
 	out := conversationResp{
 		Messages:     []claudefs.Message{},
+		Tasks:        []claudefs.Task{},
 		SessionID:    p.ClaudeSessionID,
 		Status:       p.Status,
 		Line:         s.sm.StatusLineOf(sess.ID),
@@ -95,6 +102,9 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 			if msgs, err := claudefs.ParseConversation(path, limit); err == nil {
 				out.Messages = s.withImageBlocks(msgs)
 				out.Ready = true
+				if tasks := claudefs.Tasks(out.Messages); len(tasks) > 0 {
+					out.Tasks = tasks
+				}
 			}
 		}
 	}

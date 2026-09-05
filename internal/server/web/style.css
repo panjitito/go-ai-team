@@ -706,6 +706,17 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 /* Animate only the pending card, so a long transcript is not a disco. */
 .tool.pending .tool-icon { animation: pulse 1.4s ease-in-out infinite; }
 
+/* Reasoning, folded. Quieter than a tool call: it is not something the agent
+   did, and it should not compete with the answer for attention. */
+.tool.think { background: none; border-style: dashed; }
+.tool.think .tool-name { color: var(--fg-mute); }
+.tool.think .tool-sum { font-style: italic; color: var(--fg-mute); }
+.think-body {
+  padding: 4px 12px 10px; color: var(--fg-dim); font-size: 13px;
+  max-height: 340px; overflow: auto;
+}
+.think-body p:first-child { margin-top: 6px; }
+
 /* ---- banner and empty state ---- */
 
 .chat-banner {
@@ -1092,6 +1103,19 @@ body.dnd-active .drop-root { display: block; }
 .rb-menu-item.active { color: var(--brand); font-weight: 600; }
 .rb-menu-item { display: flex; flex-direction: column; gap: 2px; max-width: 300px; }
 .rb-menu-note { color: var(--fg-mute); font-size: 10.5px; font-weight: 400; line-height: 1.4; }
+
+/* The plan. Wide enough to read the step it is on, and it truncates rather
+   than pushing the meters off the end of the bar. */
+.rb-plan {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 340px; overflow: hidden;
+}
+.rb-plan > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-plan-count { color: var(--info); flex: none; }
+.rb-plan-done .rb-plan-count { color: var(--ok); }
+.rb-menu-plan .rb-menu-item { cursor: default; }
+.rb-menu-plan .rb-menu-item:hover { background: none; color: var(--fg-dim); }
+.rb-menu-plan .rb-menu-item.is-done { color: var(--fg-mute); text-decoration: line-through; }
 
 /* Two of the four modes change what the agent will do without asking, and both
    are worth seeing from across the room rather than reading. */

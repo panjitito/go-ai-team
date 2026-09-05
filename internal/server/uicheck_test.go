@@ -375,6 +375,131 @@ new Promise(async resolve => {
 	}
 }
 
+// TestUIPlan renders the agent's plan in the run bar.
+//
+// The parser that rebuilds the plan is checked against real transcripts in
+// internal/claudefs; this is the other half — that a plan reaches the bar as
+// something you can read at a glance, that the step being worked on is the one
+// named, and that a long subject truncates instead of shoving the rate-limit
+// meters off the end.
+func TestUIPlan(t *testing.T) {
+	const port = 7805
+	startServer(t, port)
+
+	c := launchChrome(t)
+	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
+
+	if ready := c.evalString(t, `
+new Promise(async resolve => {
+  for (let i = 0; i < 60; i++) {
+    if (typeof updateRunBar === 'function') return resolve('ready');
+    await new Promise(r => setTimeout(r, 250));
+  }
+  resolve('timeout');
+})`); ready != "ready" {
+		t.Fatalf("the UI never finished loading: %s", ready)
+	}
+
+	got := c.evalString(t, `(() => {
+  const host = document.querySelector('#main');
+  host.innerHTML = '';
+  host.append(runBarEl('ses_test'));
+  const tasks = [
+    { id: '1', subject: 'Scaffold the project', status: 'completed' },
+    { id: '2', subject: 'Write the database schema and a seeder that produces a year of plausible data',
+      activeForm: 'Writing the database schema', status: 'in_progress' },
+    { id: '3', subject: 'Build the backend', status: 'pending' },
+    { id: '4', subject: 'Deploy it', status: 'pending' },
+  ];
+  updateRunBar({ line: {}, tasks });
+
+  const pill = document.querySelector('#rbPlan');
+  if (!pill || pill.style.display === 'none') return 'PILL HIDDEN';
+  const text = pill.textContent;
+  if (!text.includes('1/4')) return 'NO COUNT: ' + text;
+  // The step it is on, in the form that reads as something happening.
+  if (!text.includes('Writing the database schema')) return 'NO CURRENT STEP: ' + text;
+  if (pill.getBoundingClientRect().width > 360) return 'PILL TOO WIDE';
+  if (document.querySelector('#runBar').scrollWidth > document.querySelector('#runBar').clientWidth + 2)
+    return 'PLAN PUSHED THE BAR OUT';
+
+  pill.click();
+  const menu = document.querySelector('.rb-menu');
+  if (!menu) return 'NO POPOVER';
+  const rows = [...menu.querySelectorAll('.rb-menu-item')];
+  if (rows.length !== 4) return 'ROWS ' + rows.length;
+  if (!rows[0].classList.contains('is-done')) return 'FINISHED ROW NOT MARKED';
+  if (rows[2].classList.contains('is-done')) return 'PENDING ROW MARKED DONE';
+  if (!rows[1].classList.contains('active')) return 'CURRENT ROW NOT MARKED';
+  if (!rows[3].textContent.includes('Deploy it')) return 'LAST ROW: ' + rows[3].textContent;
+  document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+  // No plan, no pill: an agent that never made one must not show an empty box.
+  updateRunBar({ line: {}, tasks: [] });
+  if (document.querySelector('#rbPlan').style.display !== 'none') return 'PILL STAYED UP';
+  return 'ok';
+})()`)
+	if got != "ok" {
+		t.Errorf("plan in the run bar: %s", got)
+	}
+}
+
+// TestUIThinkingBlock renders the model's reasoning, folded.
+//
+// Worth stating plainly: on the Claude Code build measured while writing this,
+// thinking blocks reach the transcript with an empty body and only a signature,
+// so in practice nothing appears. Older sessions on this machine do carry the
+// text — 8,890 of 17,525 blocks — so the path is real, and this keeps it honest
+// for whenever the text comes back.
+func TestUIThinkingBlock(t *testing.T) {
+	const port = 7807
+	startServer(t, port)
+
+	c := launchChrome(t)
+	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
+
+	if ready := c.evalString(t, `
+new Promise(async resolve => {
+  for (let i = 0; i < 60; i++) {
+    if (typeof messageEl === 'function') return resolve('ready');
+    await new Promise(r => setTimeout(r, 250));
+  }
+  resolve('timeout');
+})`); ready != "ready" {
+		t.Fatalf("the UI never finished loading: %s", ready)
+	}
+
+	got := c.evalString(t, `(() => {
+  const host = document.querySelector('#main');
+  host.innerHTML = '';
+  const node = messageEl({ role: 'assistant', when: new Date().toISOString(), blocks: [
+    { kind: 'thinking', text: 'First I should check what the caller expects.\n\nThen the edge cases.' },
+    { kind: 'text', text: 'Here is the answer.' },
+  ]}, new Set());
+  host.append(node);
+
+  const card = node.querySelector('.tool.think');
+  if (!card) return 'NO CARD';
+  if (card.classList.contains('open')) return 'OPEN BY DEFAULT';
+  // Folded, it must still say enough to decide whether to unfold it.
+  const sum = (card.querySelector('.tool-sum') || {}).textContent || '';
+  if (!sum.includes('what the caller expects')) return 'NO SUMMARY: ' + sum;
+  if (card.querySelector('.tool-detail').offsetHeight !== 0) return 'BODY VISIBLE WHILE FOLDED';
+
+  card.querySelector('.tool-head').click();
+  if (!card.classList.contains('open')) return 'DID NOT UNFOLD';
+  if (!card.textContent.includes('edge cases')) return 'BODY MISSING AFTER UNFOLD';
+
+  // An empty one is what the current CLI actually writes, and it must not
+  // produce a card at all.
+  const empty = messageEl({ role: 'assistant', blocks: [{ kind: 'thinking', text: '' }] }, new Set());
+  return empty.querySelector('.tool.think') ? 'EMPTY THINKING DREW A CARD' : 'ok';
+})()`)
+	if got != "ok" {
+		t.Errorf("thinking block: %s", got)
+	}
+}
+
 // TestUIPanelsOpen asserts every topbar panel opens and renders content.
 func TestUIPanelsOpen(t *testing.T) {
 	const port = 7801
