@@ -72,3 +72,35 @@ func (r *ring) Total() int64 {
 	defer r.mu.Unlock()
 	return r.total
 }
+
+// Tail returns the last n bytes without copying the whole buffer.
+//
+// The status check runs for every session on every poll and only needs the
+// recent end; snapshotting a 256KB ring each time to read the last few kilobytes
+// of it is work nobody asked for.
+func (r *ring) Tail(n int) []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	have := int(r.total)
+	if have > r.size {
+		have = r.size
+	}
+	if n > have {
+		n = have
+	}
+	if n <= 0 {
+		return nil
+	}
+	out := make([]byte, 0, n)
+	if r.total < int64(r.size) {
+		return append(out, r.buf[r.pos-n:r.pos]...)
+	}
+	// Wrapped: the last n bytes end at pos and may straddle the seam.
+	start := r.pos - n
+	if start >= 0 {
+		return append(out, r.buf[start:r.pos]...)
+	}
+	out = append(out, r.buf[r.size+start:]...)
+	return append(out, r.buf[:r.pos]...)
+}

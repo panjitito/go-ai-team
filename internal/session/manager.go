@@ -751,17 +751,47 @@ func (m *Manager) refreshStatus(s *Session) {
 	if s.terminal() || s.lastOut.IsZero() {
 		return
 	}
-	quiet := time.Since(s.lastOut)
-	tokensQuiet := s.lastTokenMove.IsZero() || time.Since(s.lastTokenMove) > 20*time.Second
 
+	// Silence is the signal, and it is a sharp one.
+	//
+	// Measured on a real session, sampled once a second: an idle Claude Code
+	// emits exactly zero bytes — not a repaint, not a heartbeat, nothing — while
+	// a working one produces 700 to 2,700 bytes a second, because the spinner it
+	// draws carries a live elapsed timer. There is no middle ground to worry
+	// about.
+	//
+	// So the shape of this was always right and only its numbers were wrong. It
+	// waited twenty seconds before admitting a turn had ended, which left the
+	// working indicator spinning long after the answer was on screen.
+	//
+	// It also refused to flip while the transcript was growing, and that had to
+	// go: a transcript can be shared. Resuming a conversation that is also open
+	// in another terminal means the file grows from the other process, without
+	// end, and this session would have called itself busy for as long as it
+	// lived. That is the state the indicator was stuck in when it was reported.
+	//
+	// Reading the CLI's own words was tried instead — it prints an elapsed timer
+	// while working and "· done 9:13 AM" when it stops. The timer is dependable;
+	// the done line is not emitted at all in some configurations, and a session
+	// showing only the first of the two reads as permanently busy. Silence needs
+	// nothing to be printed to be true.
+	quiet := time.Since(s.lastOut)
 	switch {
-	case s.Status == StatusWorking && quiet > 20*time.Second && tokensQuiet:
+	case s.Status == StatusWorking && quiet >= idleAfter:
 		s.Status = StatusWaiting
-	case s.Status == StatusWaiting && quiet < 5*time.Second:
-		// Output resumed: it is thinking again.
+	case s.Status == StatusWaiting && quiet < idleAfter:
+		// Drawing again: it is thinking again.
 		s.Status = StatusWorking
 	}
 }
+
+// idleAfter is how long the terminal must be silent before a turn counts as
+// over.
+//
+// Short, because idle really is zero bytes per second and there is no repaint to
+// wait out. The margin covers a slow pipe and the read loop's own scheduling,
+// not the CLI having something to say.
+const idleAfter = 4 * time.Second
 
 // unbenchLoop returns quota-exhausted accounts to the pool when their window
 // reopens, so nothing has to be clicked to recover.
@@ -804,4 +834,17 @@ func EnsureDir(dir string) error {
 		return nil
 	}
 	return os.MkdirAll(filepath.Clean(dir), 0o700)
+}
+
+// RefreshStatus recomputes one session's status on demand.
+//
+// The background poll runs every few seconds, which is fine for a dashboard and
+// too slow for the indicator that says an agent is still working: it would keep
+// spinning for seconds after the answer had arrived. The conversation view asks
+// for the status as it draws, and the check is a tail scan, so this costs
+// nothing worth measuring.
+func (m *Manager) RefreshStatus(id string) {
+	if s, ok := m.Get(id); ok {
+		m.refreshStatus(s)
+	}
 }

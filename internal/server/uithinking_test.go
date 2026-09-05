@@ -38,6 +38,15 @@ new Promise(async resolve => {
   const box = document.querySelector('#composerBox');
   if (!box) return resolve(JSON.stringify({ error: 'NO COMPOSER' }));
 
+  // Start from an idle agent. If one is still finishing an earlier turn the
+  // indicator is correctly already up, and "did it appear on Send" cannot be
+  // asked yet.
+  let settled = false;
+  for (let i = 0; i < 90; i++) {
+    if (!document.querySelector('.thinking')) { settled = true; break; }
+    await sleep(1000);
+  }
+  if (!settled) return resolve(JSON.stringify({ error: 'AGENT NEVER WENT IDLE' }));
   const before = !!document.querySelector('.thinking');
 
   box.value = 'Reply with exactly: THINKING-OK';

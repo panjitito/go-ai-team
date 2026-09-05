@@ -43,6 +43,9 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, store.ErrNotFound)
 		return
 	}
+	// The status is part of this response and drives the working indicator, so
+	// it is computed now rather than left to the next background poll.
+	s.sm.RefreshStatus(sess.ID)
 	p := sess.Public()
 
 	limit := 200

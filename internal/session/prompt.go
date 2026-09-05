@@ -101,9 +101,11 @@ func (m *Manager) Tail(id string, n int) string {
 	if !ok {
 		return ""
 	}
-	b := s.ring.Snapshot()
-	if n > 0 && len(b) > n {
-		b = b[len(b)-n:]
+	// Copy only what was asked for. Snapshotting the whole 256KB ring to keep the
+	// last few kilobytes of it is work every prompt delivery was paying for
+	// several times over.
+	if n > 0 {
+		return string(s.ring.Tail(n))
 	}
-	return string(b)
+	return string(s.ring.Snapshot())
 }
