@@ -15,9 +15,10 @@
 // Icons by tool. A glanceable shape beats reading the tool name every time.
 const TOOL_ICON = {
   Read: '👁', Write: '✎', Edit: '✎', MultiEdit: '✎', NotebookEdit: '✎',
-  Bash: '❯', BashOutput: '❯', Glob: '🔍', Grep: '🔍',
+  Bash: '❯', BashOutput: '❯', PowerShell: '❯', Glob: '🔍', Grep: '🔍',
   WebFetch: '🌐', WebSearch: '🌐', Task: '🤖', Agent: '🤖',
-  TodoWrite: '☑', ExitPlanMode: '📋',
+  TodoWrite: '☑', TaskCreate: '☑', TaskUpdate: '☑', ExitPlanMode: '📋',
+  AskUserQuestion: '💬', ToolSearch: '🔍', SendUserFile: '📎',
 };
 
 const CHAT = {
@@ -541,7 +542,8 @@ function shortModel(m) {
 
 function toolEl(t, openSet) {
   const wasOpen = openSet.has(t.id);
-  const icon = TOOL_ICON[t.name] || '⚙';
+  const { name, via } = toolTitle(t.name);
+  const icon = TOOL_ICON[t.name] || (via ? '🔌' : '⚙');
 
   const card = el('div', {
     class: 'tool' + (t.isError ? ' err' : '') + (t.pending ? ' pending' : '') + (wasOpen ? ' open' : ''),
@@ -553,7 +555,10 @@ function toolEl(t, openSet) {
     onclick: () => card.classList.toggle('open'),
   },
     el('span', { class: 'tool-icon', text: icon }),
-    el('span', { class: 'tool-name', text: t.name }),
+    el('span', { class: 'tool-name', text: name }),
+    // Which MCP server provided it. "mcp__MSSQL_ReSM__query_ReSM" is unreadable
+    // as one word, and where the agent is reaching is the interesting half.
+    via ? el('span', { class: 'tool-via', text: via, title: t.name }) : null,
     t.summary ? el('span', { class: 'tool-sum', text: t.summary, title: t.summary }) : null,
     el('span', { style: 'flex:1' }),
     t.pending ? el('span', { class: 'tool-state run', text: 'running' })
@@ -562,13 +567,25 @@ function toolEl(t, openSet) {
     el('span', { class: 'tool-chev', text: '▾' }));
 
   const detail = el('div', { class: 'tool-detail' });
-  if (t.input && t.input !== '{}') {
-    detail.append(el('div', { class: 'tool-label', text: 'input' }),
-      el('pre', { class: 'tool-pre', text: t.input }));
-  }
-  if (t.result) {
-    detail.append(el('div', { class: 'tool-label', text: t.isError ? 'error' : 'result' }),
-      el('pre', { class: 'tool-pre' + (t.isError ? ' err' : ''), text: t.result }));
+
+  // What this particular tool did, rendered as the thing it is. The raw text
+  // stays available underneath, because a rendering is an interpretation and
+  // sometimes the interpretation is not what you came for.
+  const body = toolBody(t);
+  if (body && body.length) {
+    detail.append(el('div', { class: 'tv-body' }, body));
+    if (t.result && !RAW_IS_SHOWN[t.name]) {
+      detail.append(rawToggle(t));
+    }
+  } else {
+    if (t.input && t.input !== '{}') {
+      detail.append(el('div', { class: 'tool-label', text: 'input' }),
+        el('pre', { class: 'tool-pre', text: t.input }));
+    }
+    if (t.result) {
+      detail.append(el('div', { class: 'tool-label', text: t.isError ? 'error' : 'result' }),
+        el('pre', { class: 'tool-pre' + (t.isError ? ' err' : ''), text: t.result }));
+    }
   }
   if (!detail.children.length) {
     detail.append(el('div', { class: 'hint', style: 'padding:8px 10px', text: t.pending ? 'Still running…' : 'No output.' }));
@@ -576,6 +593,24 @@ function toolEl(t, openSet) {
 
   card.append(head, detail);
   return card;
+}
+
+// Tools whose rendered body already contains the whole result, so offering it
+// again underneath would just be the same text twice.
+const RAW_IS_SHOWN = { Bash: true, BashOutput: true, PowerShell: true, Read: true };
+
+// rawToggle offers the untouched result, folded.
+function rawToggle(t) {
+  const pre = el('pre', { class: 'tool-pre' + (t.isError ? ' err' : ''), text: t.result, style: 'display:none' });
+  const btn = el('button', {
+    class: 'tv-raw',
+    onclick: () => {
+      const on = pre.style.display === 'none';
+      pre.style.display = on ? '' : 'none';
+      btn.textContent = on ? 'hide the raw result' : 'show the raw result';
+    },
+  }, 'show the raw result');
+  return el('div', { class: 'tv-rawwrap' }, btn, pre);
 }
 
 // ---------------------------------------------------------------- terminal

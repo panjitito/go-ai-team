@@ -847,6 +847,92 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 }
 .tool-pre.err { color: #ffb4b4; }
 
+/* ---- tool bodies ----
+
+   Each tool rendered as the thing it is: a diff for an edit, the file for a
+   write, a command and its output for a shell call. The raw text stays one
+   click away, because a rendering is an interpretation. */
+
+.tv-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 7px; }
+.tv-note { font-size: 11.5px; color: var(--fg-mute); font-family: var(--mono); }
+.tv-sub {
+  font: 10px var(--mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--fg-mute); margin-top: 2px;
+}
+.tv-cmd {
+  margin: 0; padding: 8px 10px; background: #07090b; border: 1px solid var(--line);
+  border-radius: 7px; font: 12px/1.55 var(--mono); color: #d6e2c8;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
+.tv-prompt { color: var(--ok); user-select: none; }
+
+/* A diff without line numbers, on purpose: an Edit says what the text was and
+   what it became, and nothing about where in the file it sits. Confident wrong
+   numbers would be worse than none. */
+.tv-diff {
+  border: 1px solid var(--line); border-radius: 7px; overflow: auto;
+  background: #07090b; max-height: 420px;
+}
+.tv-row { display: flex; font: 12px/1.5 var(--mono); white-space: pre; }
+.tv-sign { flex: none; width: 18px; text-align: center; color: var(--fg-mute); user-select: none; }
+.tv-text { flex: 1; padding-right: 10px; }
+.tv-row.ctx { color: var(--fg-mute); }
+.tv-row.del { background: #2a1618; color: #ffc4c4; }
+.tv-row.del .tv-sign { color: var(--bad); }
+.tv-row.add { background: #10251a; color: #c8f5da; }
+.tv-row.add .tv-sign { color: var(--ok); }
+.tv-diff-more { padding: 5px 10px; font: 11px var(--mono); color: var(--fg-mute); }
+
+/* Read answers with its own line numbers as text; shown as a gutter instead. */
+.tv-num {
+  display: grid; grid-template-columns: auto 1fr; gap: 0 10px;
+  border: 1px solid var(--line); border-radius: 7px; background: #07090b;
+  padding: 7px 10px; max-height: 420px; overflow: auto;
+  font: 12px/1.55 var(--mono);
+}
+.tv-num .code-gutter { color: var(--fg-mute); text-align: right; user-select: none; }
+.tv-num .code-body { margin: 0; white-space: pre; }
+
+/* A question the agent asked, and what was chosen. */
+.tv-q { display: flex; align-items: baseline; gap: 7px; }
+.tv-q strong { color: var(--fg); font-weight: 600; }
+.tv-opts { display: flex; flex-direction: column; gap: 3px; }
+.tv-opt {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 8px; border-radius: 6px; color: var(--fg-mute);
+}
+.tv-opt.chosen { background: #16202b; color: var(--fg); }
+.tv-tick { flex: none; width: 10px; color: var(--fg-mute); }
+.tv-opt.chosen .tv-tick { color: var(--info); }
+.tv-opt-label { display: block; }
+.tv-opt-desc { display: block; font-size: 11px; color: var(--fg-mute); }
+.tv-answer { color: var(--info); font-size: 12.5px; }
+
+/* Not the wide key/value table used in panels: these are a tool's arguments,
+   and a value flung to the right-hand edge of the conversation is further from
+   its name than it is from the next card. */
+table.kv.tv-fields { width: auto; }
+table.kv.tv-fields td {
+  padding: 3px 12px 3px 0; vertical-align: top; border-bottom: none;
+  text-align: left; font-family: var(--mono); font-size: 12px;
+}
+table.kv.tv-fields td:first-child { width: auto; }
+table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
+.tv-key { color: var(--fg-mute); font: 11px var(--mono); white-space: nowrap; }
+
+.tv-rawwrap { padding: 0 10px 9px; }
+.tv-raw {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font: 11px var(--mono); color: var(--fg-mute); text-decoration: underline dotted;
+}
+.tv-raw:hover { color: var(--fg-dim); }
+
+/* Which MCP server provided a tool. */
+.tool-via {
+  font: 10px var(--mono); color: var(--fg-mute);
+  background: var(--bg); padding: 0 5px; border-radius: 20px; flex: none;
+}
+
 /* Animate only the pending card, so a long transcript is not a disco. */
 .tool.pending .tool-icon { animation: pulse 1.4s ease-in-out infinite; }
 
