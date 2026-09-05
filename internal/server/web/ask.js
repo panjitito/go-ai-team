@@ -1,15 +1,17 @@
-/* Answering the CLI's permission prompts without leaving the conversation.
+/* Answering the CLI's questions without leaving the conversation.
  *
- * "Do you want to create hello.txt?" is the single most frequent thing Claude
- * Code says, and until now the conversation view could only tell you it had been
- * said and point at another tab. The prompt is drawn by the CLI, not written to
- * the transcript, so there was nothing to render — but it is on the terminal,
- * and the terminal is right here.
+ * Two kinds, and the same panel serves both. "Do you want to create hello.txt?"
+ * is the most frequent thing Claude Code says; the picker AskUserQuestion draws
+ * is the one where the agent wants a decision from you before it carries on.
+ * Neither reaches the transcript — both are drawn to the terminal — so the
+ * conversation could only say that something had been asked and point at
+ * another tab.
  *
- * Clicking an option writes that digit into the pty. It is the same keystroke a
- * person sitting at the terminal would send, answered by the CLI in its own
- * interface: nothing here decides anything on your behalf, and nothing reaches
- * around the permission system.
+ * Clicking an option moves the CLI's own highlight onto that row and presses
+ * Enter, which is what a person at the terminal does. It is checked before the
+ * Enter goes out: the cursor's position is read back off the screen first.
+ * Nothing here decides anything on your behalf, and nothing reaches around the
+ * permission system.
  */
 'use strict';
 
@@ -23,7 +25,8 @@ const ASK = {
 
 function askSig(ask) {
   if (!ask) return '';
-  return ask.question + '|' + ask.options.map(o => o.number + o.label + (o.selected ? '*' : '')).join('~');
+  return (ask.steps || '') + '|' + ask.question + '|' +
+    ask.options.map(o => o.number + o.label + (o.selected ? '*' : '')).join('~');
 }
 
 // renderAsk draws, updates or removes the panel. Returns true when a question
@@ -66,11 +69,19 @@ function askPanel(ask, sessionId) {
       onclick: e => answerAsk(sessionId, o.number, e.currentTarget),
     },
       el('span', { class: 'ask-num', text: String(o.number) }),
-      el('span', { class: 'ask-label', text: o.label })));
+      el('span', { class: 'ask-label' },
+        el('span', { text: o.label }),
+        // The picker prints this under the option, and it is often the part
+        // that decides the answer.
+        o.description ? el('span', { class: 'ask-desc', text: o.description }) : null)));
   }
 
   return el('div', { class: 'ask' },
-    el('div', { class: 'ask-q' }, el('span', { class: 'ask-icon', text: '🔐' }),
+    // The step strip, when the agent asked more than one thing. Without it the
+    // second question arrives as a surprise after answering the first.
+    ask.steps ? el('div', { class: 'ask-steps', text: ask.steps }) : null,
+    el('div', { class: 'ask-q' },
+      el('span', { class: 'ask-icon', text: ask.steps ? '💬' : '🔐' }),
       el('strong', { text: ask.question })),
     buttons,
     el('div', { class: 'ask-foot' },

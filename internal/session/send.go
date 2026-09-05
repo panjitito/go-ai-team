@@ -135,8 +135,17 @@ func (m *Manager) deliverPrompt(s *Session, text string) error {
 			return nil
 		}
 
-		// Still sitting on the prompt line: press Enter again. This is safe at
-		// any time, because Enter on an empty composer does nothing.
+		// A box on screen means the CLI took the message and is now asking
+		// something about it. Enter here would answer that question — pick
+		// whatever the cursor happens to be on — rather than submit anything.
+		// Exactly this turned `/theme` into "theme set" without anyone choosing.
+		if _, asking := ParseAsk(m.Tail(s.ID, askTail)); asking {
+			return nil
+		}
+
+		// Still sitting on the prompt line: press Enter again. Safe only because
+		// of the check above — on an empty composer it does nothing, but there is
+		// no such thing as a harmless Enter while a picker is up.
 		if deliveryState(m.Tail(s.ID, tailWindow), text) == deliveryTyped {
 			landed = true
 			if err := m.Write(s.ID, []byte("\r")); err != nil {

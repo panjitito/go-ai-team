@@ -394,12 +394,35 @@ new Promise(async resolve => {
   renderAsk({ ask }, 'ses_test');
   const opts = [...host.querySelectorAll('.ask-opt')];
   if (opts.length !== 3) return 'WRONG COUNT ' + opts.length;
+  // A permission prompt has no descriptions and no step strip; neither should
+  // appear out of nowhere.
+  if (host.querySelector('.ask-desc')) return 'DESCRIPTION INVENTED';
+  if (host.querySelector('.ask-steps')) return 'STEPS INVENTED';
   if (!host.textContent.includes('create hello.txt?')) return 'QUESTION MISSING';
   if (!opts[1].classList.contains('selected')) return 'SELECTION NOT MARKED';
   if (opts[0].classList.contains('selected')) return 'WRONG ROW MARKED';
   if (!opts[2].classList.contains('no')) return 'DECLINE NOT MARKED';
   if (opts[0].querySelector('.ask-num').textContent !== '1') return 'NUMBER MISSING';
   if (host.scrollWidth > document.querySelector('#main').clientWidth + 2) return 'PANEL TOO WIDE';
+  // The other kind: a question the agent asked, with a description under each
+  // option and a strip saying how many questions there are.
+  renderAsk({ ask: {
+    question: 'What is your favourite colour?',
+    steps: '☐ Colour ☐ Size ✔ Submit',
+    options: [
+      { number: 1, label: 'Red', description: 'A warm, vibrant colour', selected: true },
+      { number: 2, label: 'Green', description: 'A calming, natural colour', selected: false },
+    ],
+  }}, 'ses_test');
+  const steps = host.querySelector('.ask-steps');
+  if (!steps || !steps.textContent.includes('Submit')) return 'NO STEPS';
+  const descs = [...host.querySelectorAll('.ask-desc')].map(n => n.textContent);
+  if (descs.length !== 2) return 'DESCRIPTIONS ' + descs.length;
+  if (!descs[0].includes('warm')) return 'DESCRIPTION WRONG: ' + descs[0];
+  // The label must still be the label, not the two run together.
+  const first = host.querySelector('.ask-opt .ask-label').firstChild.textContent;
+  if (first !== 'Red') return 'LABEL SWALLOWED THE DESCRIPTION: ' + first;
+
   renderAsk({}, 'ses_test');
   if (host.querySelector('.ask-opt')) return 'PANEL STAYED UP';
   if (host.style.display !== 'none') return 'PANEL NOT HIDDEN';

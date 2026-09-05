@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // Answering the CLI's questions without leaving the conversation.
@@ -32,6 +34,10 @@ import (
 type Ask struct {
 	Question string      `json:"question"`
 	Options  []AskOption `json:"options"`
+	// Steps is the tab strip a multi-question picker draws above its question —
+	// "☐ Colour ☐ Size ✔ Submit" — which says there is more than one question
+	// coming and which one this is. Empty for a single question.
+	Steps string `json:"steps,omitempty"`
 	// Cancel reports whether Esc will dismiss it, which the box says itself.
 	Cancel bool `json:"cancel"`
 }
@@ -40,6 +46,11 @@ type Ask struct {
 type AskOption struct {
 	Number int    `json:"number"`
 	Label  string `json:"label"`
+	// Description is the explanatory line a picker prints under an option —
+	// "A warm, vibrant colour" beneath "Red". It has its own row on the screen,
+	// which is what makes it separable at all; read from the flattened bytes the
+	// two ran together into one unreadable string.
+	Description string `json:"description,omitempty"`
 	// Selected is the option the CLI's own cursor is on, so the UI can show
 	// what pressing Enter in the terminal would do.
 	Selected bool `json:"selected"`
@@ -59,7 +70,14 @@ var (
 	// button came out reading "No Esc to cancel · Tab to amend". Captured
 	// fixtures did not show it, because there the footer happened to be the last
 	// thing in the buffer.
-	askFooter = regexp.MustCompile(`(?is)\s*(?:Esc to cancel|Tab to amend)\b.*$`)
+	// Different boxes word their footer differently — "Esc to cancel · Tab to
+	// amend" on a permission prompt, "Enter to select · Tab/Arrow keys to
+	// navigate · Esc to cancel" on a question picker — and a phrase this list
+	// misses ends up glued onto the last option's label, which is where the
+	// person is reading.
+	askFooter = regexp.MustCompile(`(?is)\s*(?:Esc to cancel|Esc to exit|Tab to amend|` +
+		`Enter to select|Enter to confirm|Enter to continue|Tab/Arrow|Arrow keys|` +
+		`keys to navigate)\b.*$`)
 
 	// A space the frame left in front of its punctuation.
 	askGap = regexp.MustCompile(`\s+([?:!])`)
@@ -85,7 +103,7 @@ var (
 // nothing. Those two are far enough apart to tell without knowing how long ago
 // anything happened.
 func ParseAsk(tail string) (Ask, bool) {
-	s := flattenFrame(tail)
+	s := screenText(tail)
 
 	cur := strings.LastIndex(s, "❯")
 	if cur < 0 || !cursorOnAnOption(s, cur) {
@@ -98,14 +116,18 @@ func ParseAsk(tail string) (Ask, bool) {
 		// so does a line of prose that happens to begin "1.".
 		return Ask{}, false
 	}
-	// The cursor belongs to this box, not to something drawn after it.
-	if cur < from-4 || cur > to {
+	// The cursor belongs to this box, not to something drawn after it. Measured
+	// rather than allowed a few characters of slack: the padding between the
+	// cursor and the first option is however wide the picker drew it, and only
+	// looked like one space because the flatten used to collapse it.
+	if cur > to || strings.TrimSpace(strings.TrimPrefix(s[min(cur, from):from], "❯")) != "" {
 		return Ask{}, false
 	}
 
 	return Ask{
 		Question: repairQuestion(s, questionBefore(s, from)),
 		Options:  opts,
+		Steps:    AskSteps(s[max(0, from-300):from]),
 		Cancel:   strings.Contains(strings.ToLower(s[from:]), "esc to cancel"),
 	}, true
 }
@@ -151,6 +173,94 @@ func repairQuestion(s, q string) string {
 	}
 	return best
 }
+
+// screenText is the frame as it currently looks, one row per line.
+//
+// Not the flattened byte tail, and the difference is the whole reason answering
+// a question from the conversation works at all. A TUI repaints only the cells
+// that changed: press Down in a picker and the bytes that arrive are the cursor
+// moving and nothing else, so the recent tail holds ". 6. 7. 8." where the
+// options used to be. Parsed from the tail, the box appears to vanish the
+// instant it is touched — which is exactly what it looked like, and why the
+// first attempt at answering reported "the question went away" while the
+// terminal plainly still showed it.
+//
+// Rendering the frame keeps what was drawn earlier, because that is what is
+// still on the screen.
+func screenText(tail string) string {
+	rows := Screen(tail)
+	parts := make([]string, 0, len(rows))
+	for _, r := range rows {
+		parts = append(parts, r.Text)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// splitDescription separates an option from the note printed under it.
+//
+// Exact, because the screen is rendered by rows: the option is one row and its
+// description is the next. Read from the flattened bytes the two arrived as
+// "Red A warm, vibrant colour", with nothing to say where one ended.
+//
+// A row that merely wrapped is left joined. A description is a separate row the
+// picker chose to print, not the tail of a sentence that ran out of width, and
+// what tells them apart is whether the first row finishes a thought.
+func splitDescription(s string) (label, desc string) {
+	i := strings.IndexByte(s, '\n')
+	if i < 0 {
+		return s, ""
+	}
+	head := strings.TrimSpace(collapse(s[:i]))
+	rest := strings.TrimSpace(collapse(s[i+1:]))
+	if head == "" || rest == "" {
+		return strings.TrimSpace(collapse(s)), ""
+	}
+	if len(head) > 60 && !strings.HasSuffix(head, ".") {
+		return head + " " + rest, ""
+	}
+	return head, rest
+}
+
+// cleanFurniture removes the parts of a frame that are decoration rather than
+// what is being asked.
+//
+// Two kinds. Box rules, which are the widest thing on screen and say nothing.
+// And the tab strip a multi-question picker draws above its question —
+// "← ☐ Colour ☐ Size ✔ Submit →" — which is genuinely useful, but as a caption
+// telling you there are two questions and where you are, not as the first
+// forty characters of the question itself.
+//
+// Also drops replacement characters. The terminal is read as a byte tail, so it
+// can begin in the middle of a rune, and half a box-drawing character is not
+// something to show anybody.
+func cleanFurniture(s string) string {
+	s = askTabStrip.ReplaceAllString(s, " ")
+	s = askRules.ReplaceAllString(s, " ")
+	return strings.Map(func(r rune) rune {
+		if r == utf8.RuneError {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(s, ""))
+}
+
+// AskSteps returns the tab strip a multi-question picker draws, if there is one,
+// so the panel can say "two questions, this is the first".
+func AskSteps(s string) string {
+	m := askTabStrip.FindString(s)
+	if m == "" {
+		return ""
+	}
+	return strings.TrimSpace(collapse(strings.Trim(strings.TrimSpace(m), "←→")))
+}
+
+var (
+	// Four or more, so a hyphenated word or an arrow is never mistaken for one.
+	askRules = regexp.MustCompile(`[─━═╌╍┄┅]{4,}`)
+	// From the left arrow to the right one, which is how the strip is drawn.
+	askTabStrip = regexp.MustCompile(`←[^←→
+]{0,160}→`)
+)
 
 func despace(s string) string {
 	return strings.Map(func(r rune) rune {
@@ -218,18 +328,38 @@ func cursorOnAnOption(s string, cur int) bool {
 // thing there is to show the last stretch of what the CLI wrote rather than to
 // invent a heading for it.
 func questionBefore(s string, at int) string {
-	w := s[max(0, at-260):at]
-	if i := strings.LastIndex(w, "Do you want"); i >= 0 {
-		w = w[i:]
-	} else {
-		// Box rules and blank lines are where one piece of text ends and the
-		// next begins; keep only what follows the last of them.
-		if i := strings.LastIndexAny(w, "╌─\n"); i >= 0 && len(w)-i > 20 {
-			w = w[i+1:]
+	// One row, because this is a rendered screen and a question occupies a row.
+	//
+	// It used to take a fixed window of characters back from the options and hunt
+	// for the start of a sentence inside it, which is how a box rule and the tab
+	// strip above the question ended up as the first forty characters of it.
+	// Walking back a line at a time and stopping at the first that says something
+	// is simpler and right by construction.
+	var picked []string
+	lines := strings.Split(s[:at], "\n")
+	for i := len(lines) - 1; i >= 0 && len(picked) < 2; i-- {
+		t := strings.TrimSpace(collapse(cleanFurniture(lines[i])))
+		// A row holding only the cursor is not the question, and neither is an
+		// empty one — the cursor sits on its own row above the options and was
+		// winning every time.
+		t = strings.TrimSpace(strings.Trim(t, " ❯›»"))
+		if t == "" {
+			continue
 		}
-		w = strings.TrimLeft(w, "╌─ \t\n")
+		picked = append([]string{t}, picked...)
+		// A question ends in a question mark or a colon. Once one is found there
+		// is no reason to keep walking up into whatever was printed before it.
+		if strings.HasSuffix(t, "?") || strings.HasSuffix(t, ":") {
+			break
+		}
 	}
-	q := strings.TrimRight(strings.TrimSpace(collapse(w)), " ❯\t")
+	w := strings.Join(picked, " ")
+	// A permission prompt states its question part-way along a row, after
+	// whatever else the CLI last drew there.
+	if i := strings.LastIndex(w, askOpen); i >= 0 {
+		w = w[i:]
+	}
+	q := strings.TrimRight(w, " ❯\t")
 	// "hello.txt ?" — the flattening leaves a gap wherever the frame moved the
 	// cursor, and a space before the question mark is the one that shows.
 	q = askGap.ReplaceAllString(strings.TrimSpace(q), "$1")
@@ -295,11 +425,16 @@ func parseOptions(s string, cursorAt int) ([]AskOption, int, int) {
 			stop = numAt[x+1]
 		}
 		label := askFooter.ReplaceAllString(s[labelAt[x]:stop], "")
+		head, desc := splitDescription(label)
+		tidy := func(v string) string {
+			return strings.TrimSpace(strings.TrimRight(collapse(v), "╌─❯✔ \t\n"))
+		}
 		opts[x] = AskOption{
 			Number: x + 1,
 			// A box rule closes the menu and the last label runs into it; the
 			// cursor and the current-setting tick sit at the end of a row.
-			Label: strings.TrimSpace(strings.TrimRight(collapse(label), "╌─❯✔ \t\n")),
+			Label:       tidy(head),
+			Description: tidy(desc),
 			// The cursor is drawn immediately in front of the row it has
 			// selected: after the previous option's text, before this one's.
 			Selected: cursorAt >= 0 && cursorAt < numAt[x] &&
@@ -346,27 +481,107 @@ const askTail = 12 << 10
 
 // Answer picks one of the numbered options.
 //
-// The number is written as a keystroke, which is what a person pressing that
-// key sends. It is checked against the question that is actually on screen
-// first: a stale click, on a box that has already been answered, would
-// otherwise type a loose digit into the composer and sit there.
+// By moving the cursor and pressing Enter, not by typing the number — and that
+// distinction is the whole of this function.
+//
+// Typing the digit was the first implementation, and it works on a permission
+// prompt: pressing "1" there really does answer it, proved by the file appearing
+// on disk. It does nothing at all on the picker AskUserQuestion draws, whose
+// footer says "Enter to select · Tab/Arrow keys to navigate". The numbers there
+// are labels, not shortcuts. So the panel showed five clickable options over a
+// box that ignored every one of them, which is worse than not offering them.
+//
+// Arrow keys and Enter work on both, because both are the same kind of widget.
+// And they can be checked: after moving, the cursor's own position is read back
+// off the screen, and Enter is only sent once it is on the row that was asked
+// for. Nothing here presses Enter hopefully.
 func (m *Manager) Answer(id string, n int) error {
 	ask, ok := m.AskOf(id)
 	if !ok {
 		return fmt.Errorf("there is no question on screen any more — it was answered or cancelled")
 	}
-	found := false
-	for _, o := range ask.Options {
-		if o.Number == n {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !hasOption(ask, n) {
 		return fmt.Errorf("option %d is not one of the choices being offered", n)
 	}
-	return m.SendKeys(id, strconv.Itoa(n))
+
+	for attempt := 0; attempt < answerTries; attempt++ {
+		at, want := selectedNumber(ask), n
+		if at == 0 {
+			return fmt.Errorf("cannot tell which option is highlighted, so it is not safe to press Enter")
+		}
+		if at == want {
+			// On the row asked for. Only now.
+			return m.SendKeys(id, "\r")
+		}
+		key := "\x1b[B" // down
+		steps := want - at
+		if steps < 0 {
+			key, steps = "\x1b[A", -steps // up
+		}
+		for i := 0; i < steps; i++ {
+			if err := m.SendKeys(id, key); err != nil {
+				return err
+			}
+			time.Sleep(answerStep)
+		}
+		// Read back, with patience. The box repaints after every keypress, and a
+		// read that lands mid-repaint sees no cursor and no options — which is
+		// not the question having gone away, it is the question being redrawn.
+		// Treating the first failed read as fatal made answering fail outright
+		// perhaps half the time.
+		ask, ok = m.askSettled(id)
+		if !ok {
+			return fmt.Errorf("the question went away while it was being answered")
+		}
+		if !hasOption(ask, n) {
+			return fmt.Errorf("the question changed while it was being answered")
+		}
+	}
+	return fmt.Errorf("could not move the highlight onto option %d — answer it in the terminal", n)
 }
+
+func hasOption(a Ask, n int) bool {
+	for _, o := range a.Options {
+		if o.Number == n {
+			return true
+		}
+	}
+	return false
+}
+
+// selectedNumber is the option the cursor is on, or 0 when that cannot be told.
+func selectedNumber(a Ask) int {
+	for _, o := range a.Options {
+		if o.Selected {
+			return o.Number
+		}
+	}
+	return 0
+}
+
+// askSettled reads the question back once the frame has stopped moving.
+func (m *Manager) askSettled(id string) (Ask, bool) {
+	deadline := time.Now().Add(answerSettle * 6)
+	for {
+		time.Sleep(answerSettle)
+		if a, ok := m.AskOf(id); ok {
+			return a, true
+		}
+		if time.Now().After(deadline) {
+			return Ask{}, false
+		}
+	}
+}
+
+const (
+	// answerTries bounds the move-and-check loop. Two passes is enough for a
+	// repaint that lands mid-read; more than that and something is wrong.
+	answerTries = 3
+	// answerStep paces the arrow keys so the TUI redraws between them.
+	answerStep = 45 * time.Millisecond
+	// answerSettle is how long to let the frame settle before reading it back.
+	answerSettle = 260 * time.Millisecond
+)
 
 // refreshAsk notices when a session starts, or stops, waiting on a person.
 //

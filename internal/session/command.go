@@ -60,6 +60,15 @@ func (m *Manager) SendCommand(sessionID, text string) error {
 
 	// Polled quickly, because the whole signal is catching the line before and
 	// after the CLI clears it.
+	// Enter exactly once, and never again — the same rule a prompt follows.
+	//
+	// This used to press Enter on every check for four seconds, reasoning that
+	// Enter on an empty composer does nothing. True of an empty composer, false
+	// of everything else: half of these commands open a picker, and Enter in a
+	// picker chooses whatever is highlighted. `/theme` really did set the theme,
+	// with the log reading "Theme set to dark" before anything had been asked —
+	// and every arrow key sent afterwards looked like it closed the box, because
+	// the box was already gone.
 	sawTyped := false
 	deadline := time.Now().Add(commandBudget)
 	for time.Now().Before(deadline) {
@@ -72,14 +81,20 @@ func (m *Manager) SendCommand(sessionID, text string) error {
 			return nil
 		}
 
+		// A box on screen means the command was taken and has opened something.
+		// Whatever is in front of the person now is theirs to answer.
+		if _, asking := ParseAsk(m.Tail(s.ID, askTail)); asking {
+			return nil
+		}
+
 		switch deliveryState(m.Tail(s.ID, tailWindow), text) {
 		case deliveryTyped:
-			// Sitting on the prompt line unsent. Enter is free to repeat: on an
-			// empty composer it does nothing.
+			// Watched, not re-pressed. Pressing Enter once more — even after a
+			// check — lands before the picker has finished drawing, so the check
+			// sees nothing and presses anyway. A return that genuinely goes
+			// missing is rare and visible; a stray one is silent and picks
+			// something.
 			sawTyped = true
-			if err := m.Write(s.ID, []byte("\r")); err != nil {
-				return err
-			}
 		default:
 			if sawTyped {
 				// Arrived, and then left the prompt line. Taken.

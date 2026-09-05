@@ -187,6 +187,57 @@ func TestParseAskRepairIsANoOpWithoutAnEarlierRender(t *testing.T) {
 	}
 }
 
+// The picker AskUserQuestion draws, captured from a real agent asking two
+// questions at once. Not a permission prompt: it has a tab strip above it, a
+// description beside each option, and a footer worded differently — every one of
+// which leaked into what the panel showed before.
+func TestParseAskQuestionPicker(t *testing.T) {
+	ask, ok := ParseAsk(fixture(t, "ask_question.bin"))
+	if !ok {
+		t.Fatal("the question picker was not recognised")
+	}
+	// The second of the two questions, because that is the frame this terminal
+	// was left on. Reading the byte tail instead used to answer with the *first*
+	// question, which had already been answered — a picker repaints in place, so
+	// the older one is still in the bytes and is not on the screen.
+	if ask.Question != "What is your preferred size?" {
+		t.Errorf("question = %q — either furniture is leaking in, or this is the stale frame", ask.Question)
+	}
+	// The strip says how many questions there are and which is answered.
+	if !strings.Contains(ask.Steps, "Colour") || !strings.Contains(ask.Steps, "Submit") {
+		t.Errorf("steps = %q", ask.Steps)
+	}
+	if len(ask.Options) != 4 {
+		t.Fatalf("got %d options, want 4: %+v", len(ask.Options), ask.Options)
+	}
+	if !strings.HasPrefix(ask.Options[0].Label, "Small") || !ask.Options[0].Selected {
+		t.Errorf("option 1 = %+v", ask.Options[0])
+	}
+	// This footer is worded "Enter to select · Tab/Arrow keys to navigate · Esc
+	// to cancel", and the last option used to swallow all of it.
+	if last := ask.Options[3].Label; last != "Chat about this" {
+		t.Errorf("last option = %q, want just its own text", last)
+	}
+}
+
+// A byte tail can begin in the middle of a rune, and the cut used to advance one
+// byte past a three-byte box rule — leaving two of its bytes at the front of
+// every question a picker asked.
+func TestParseAskNoBrokenRunes(t *testing.T) {
+	ask, ok := ParseAsk(fixture(t, "ask_question.bin"))
+	if !ok {
+		t.Fatal("not parsed")
+	}
+	for _, r := range ask.Question {
+		if r == 0xFFFD {
+			t.Fatalf("the question carries a broken character: %q", ask.Question)
+		}
+	}
+	if strings.ContainsAny(ask.Question, "─━═╌") {
+		t.Errorf("box drawing left in the question: %q", ask.Question)
+	}
+}
+
 func TestParseAskNoPrompt(t *testing.T) {
 	for _, s := range []string{
 		"",

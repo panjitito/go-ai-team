@@ -858,7 +858,16 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
   border: 1px solid var(--line-2); background: var(--bg-3);
   font: 600 11px/17px var(--mono); text-align: center; color: var(--fg-mute);
 }
-.ask-label { flex: 1; }
+.ask-label { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+/* The line the picker prints under an option, which is often what decides the
+   answer. Quieter than the option itself, and never competing with it. */
+.ask-desc { color: var(--fg-mute); font-size: 11.5px; line-height: 1.4; }
+/* "☐ Colour ☐ Size ✔ Submit" — how many questions there are and where you are.
+   A caption, because it is orientation rather than content. */
+.ask-steps {
+  font: 11px var(--mono); color: var(--fg-mute);
+  letter-spacing: .02em; margin-bottom: -4px;
+}
 .ask-foot { display: flex; align-items: center; gap: 10px; }
 .ask-foot .hint { flex: 1; }
 
