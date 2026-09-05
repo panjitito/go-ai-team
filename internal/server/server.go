@@ -132,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/stop", s.stopSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.removeSession)
 	mux.HandleFunc("POST /api/sessions/{id}/input", s.sendInput)
+	mux.HandleFunc("POST /api/sessions/{id}/command", s.runCommand)
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.answerAsk)
 	mux.HandleFunc("POST /api/sessions/{id}/interrupt", s.interruptSession)
 	mux.HandleFunc("POST /api/sessions/{id}/mode", s.setMode)

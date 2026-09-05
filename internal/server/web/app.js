@@ -105,14 +105,22 @@ function initials(name) {
     .map(w => w[0].toUpperCase()).join('') || '?';
 }
 
-function toast(msg, kind = '') {
-  const t = el('div', { class: 'toast ' + kind, text: msg });
+// toast says one thing, briefly. An optional onClick makes it the way to the
+// thing it is about — a question that needs answering is not much use as a
+// notice you then have to go and find the agent for.
+function toast(msg, kind = '', onClick) {
+  const t = el('div', { class: 'toast ' + kind + (onClick ? ' clickable' : ''), text: msg });
+  if (onClick) {
+    t.onclick = () => { t.remove(); onClick(); };
+  }
   $('#toasts').append(t);
+  // Bad news and a question both deserve longer than a confirmation does.
+  const life = kind === 'bad' ? 7000 : kind === 'warn' ? 9000 : 3600;
   setTimeout(() => {
     t.style.transition = 'opacity .25s';
     t.style.opacity = '0';
     setTimeout(() => t.remove(), 260);
-  }, kind === 'bad' ? 7000 : 3600);
+  }, life);
 }
 
 // api wraps fetch so every call reports its error the same way, in a toast,
@@ -186,6 +194,7 @@ async function loadAll() {
     S.selectedProject = S.projects.length ? S.projects[0].id : null;
   }
   render();
+  updateWaitingCount();
 }
 
 // ---------------------------------------------------------------- render
@@ -390,8 +399,13 @@ function agentCard(a) {
   const roleColor = a.color || (ROLES.find(r => r[0] === a.role) || [, '#64748b'])[1];
   const status = sess ? sess.status : 'offline';
 
+  // An agent stopped at a question is the one thing on this screen worth
+  // crossing the room for, and "waiting" alone does not say it — that is also
+  // what an agent waiting on the model looks like.
+  const asking = !!(sess && sess.needsYou);
+
   const card = el('div', {
-    class: 'card' + (sess ? ' running' : ''),
+    class: 'card' + (sess ? ' running' : '') + (asking ? ' asking' : ''),
     onclick: () => sess ? openTerm(sess.id) : startAgent(a),
   },
     el('div', { class: 'card-top' },
@@ -408,8 +422,11 @@ function agentCard(a) {
       }, '···')),
 
     el('div', { class: 'card-meta' },
-      el('span', { class: 'pill' + (status === 'waiting' ? ' bad' : status === 'working' ? ' warn' : '') },
-        el('span', { class: 'dot ' + status }), status),
+      asking
+        ? el('span', { class: 'pill needs-you', title: sess.question || 'It is asking you something' },
+            el('span', { class: 'dot waiting' }), 'needs you')
+        : el('span', { class: 'pill' + (status === 'waiting' ? ' bad' : status === 'working' ? ' warn' : '') },
+            el('span', { class: 'dot ' + status }), status),
       el('span', { class: 'pill', title: `account resolved from: ${res.source || 'n/a'}` },
         el('span', { class: 'acct-dot', style: `background:${effColor}` }), effName),
       sess && sess.switchCount
@@ -1160,6 +1177,19 @@ async function openDoctor() {
 
 // ---------------------------------------------------------------- realtime
 
+// The tab and window caption carry the count, so the answer to "is anything
+// waiting on me" is visible from the taskbar without opening the app. On the
+// desktop window this is the caption of the window itself.
+function updateWaitingCount() {
+  const n = S.sessions.filter(s => s.needsYou && s.status !== 'exited' && s.status !== 'error').length;
+  document.title = n ? `(${n}) Go AI Team` : 'Go AI Team';
+}
+
+function agentName(agentId) {
+  const a = agentId && agentById(agentId);
+  return a ? a.name : '';
+}
+
 function patchSession(p) {
   if (!p || !p.id) return;
   const i = S.sessions.findIndex(s => s.id === p.id);
@@ -1185,6 +1215,7 @@ function connectEvents() {
       S.accounts = m.accounts || S.accounts;
       if (S.view === 'grid') renderMain();
       renderTopbar(); renderStatus(); renderSidebar();
+      updateWaitingCount();
       return;
     }
 
@@ -1221,7 +1252,18 @@ function connectEvents() {
         break;
       case 'session.note':
         break;
+      case 'session.needs-you':
+        // Not while you are looking straight at it: the panel is already on
+        // screen and a toast over the top of it is noise.
+        if (S.openSession !== m.sessionId) {
+          const who = agentName(m.agentId) || 'An agent';
+          toast(`${who} needs you — ${m.message || 'it is asking something'}`, 'warn',
+            () => openTerm(m.sessionId));
+        }
+        break;
     }
+
+    updateWaitingCount();
 
     if (S.view === 'grid') renderMain();
     if (S.view === 'term') updateTermTokens();

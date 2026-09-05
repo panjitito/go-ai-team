@@ -223,7 +223,28 @@ new Promise(async resolve => {
   await sleep(2500);
   const effortLabel = (document.querySelector('#rbEffort') || {}).textContent;
 
-  resolve(JSON.stringify({ before, want, after, effortLabel }));
+  // Put the model back. Which model a session is on changes how long a turn
+  // takes, and the next test measures exactly that — leaving it switched made
+  // a neighbouring check fail for reasons that had nothing to do with it.
+  const backTo = before.split(' ')[0];
+  if (backTo && backTo.toLowerCase() !== want.toLowerCase()) {
+    document.querySelector('#rbModel').click();
+    await sleep(300);
+    const back = [...document.querySelectorAll('.rb-menu-item')]
+      .find(b => b.textContent.toLowerCase() === backTo.toLowerCase());
+    if (back) {
+      back.click();
+      // Read it back, the same way the switch above is read back. A fixed sleep
+      // was not long enough and left the session on the other model, which is
+      // the state this restore exists to avoid.
+      for (let i = 0; i < 30; i++) {
+        await sleep(1000);
+        if (model().toLowerCase().startsWith(backTo.toLowerCase())) break;
+      }
+    }
+  }
+
+  resolve(JSON.stringify({ before, want, after, effortLabel, restored: model() }));
 })`)
 	t.Logf("switch: %s", got)
 

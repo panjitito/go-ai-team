@@ -5,6 +5,7 @@ package desktop
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -60,6 +61,8 @@ func Run(o Opts) error {
 
 	hwnd := windows.HWND(uintptr(w.Window()))
 	setAppIcon(hwnd)
+	setLive(uintptr(hwnd))
+	defer setLive(0)
 
 	// Show the window a second time, deliberately.
 	//
@@ -122,7 +125,79 @@ var (
 	procGetSystemMetric     = user32.NewProc("GetSystemMetrics")
 	procShowWindow          = user32.NewProc("ShowWindow")
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
+	procFlashWindowEx       = user32.NewProc("FlashWindowEx")
 )
+
+// The window, for code that is not the message loop.
+//
+// Attention is called from a background goroutine watching sessions, so the
+// handle has to outlive Run's stack. A mutex rather than an atomic because it is
+// touched twice per process and read rarely.
+var (
+	liveMu   sync.Mutex
+	liveHWND uintptr
+)
+
+func setLive(h uintptr) {
+	liveMu.Lock()
+	liveHWND = h
+	liveMu.Unlock()
+}
+
+// flashInfo mirrors Win32 FLASHWINFO.
+type flashInfo struct {
+	size    uint32
+	hwnd    uintptr
+	flags   uint32
+	count   uint32
+	timeout uint32
+}
+
+const (
+	flashwStop      = 0
+	flashwCaption   = 0x00000001
+	flashwTray      = 0x00000002
+	flashwTimerNoFG = 0x0000000C
+)
+
+// Attention marks the window as wanting the person back, without stealing what
+// they are doing.
+//
+// Deliberately not SetForegroundWindow: an agent finishing a question is not a
+// reason to yank focus out of the editor somebody is typing in. FLASHW_TIMERNOFG
+// flashes the taskbar button until the window is brought forward and then stops
+// on its own, which is the Windows convention for exactly this.
+func Attention() {
+	liveMu.Lock()
+	h := liveHWND
+	liveMu.Unlock()
+	if h == 0 {
+		// No native window: running in a browser, or headless. Nothing to flash,
+		// and the page's own title still says so.
+		return
+	}
+	fi := flashInfo{
+		hwnd:  h,
+		flags: flashwCaption | flashwTray | flashwTimerNoFG,
+		count: 0,
+	}
+	fi.size = uint32(unsafe.Sizeof(fi))
+	procFlashWindowEx.Call(uintptr(unsafe.Pointer(&fi)))
+}
+
+// StopAttention clears the flashing, for when the thing was dealt with
+// elsewhere — answered in the terminal, or on a phone.
+func StopAttention() {
+	liveMu.Lock()
+	h := liveHWND
+	liveMu.Unlock()
+	if h == 0 {
+		return
+	}
+	fi := flashInfo{hwnd: h, flags: flashwStop}
+	fi.size = uint32(unsafe.Sizeof(fi))
+	procFlashWindowEx.Call(uintptr(unsafe.Pointer(&fi)))
+}
 
 // windowPlacement mirrors the Win32 WINDOWPLACEMENT structure.
 //

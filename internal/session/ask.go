@@ -104,11 +104,96 @@ func ParseAsk(tail string) (Ask, bool) {
 	}
 
 	return Ask{
-		Question: questionBefore(s, from),
+		Question: repairQuestion(s, questionBefore(s, from)),
 		Options:  opts,
 		Cancel:   strings.Contains(strings.ToLower(s[from:]), "esc to cancel"),
 	}, true
 }
+
+// repairQuestion fills in a character a partial repaint swallowed.
+//
+// The box is drawn once in full and then patched, and a patch that moves the
+// cursor over a cell it is not rewriting means that character never reaches us:
+// "notify-1788592053.txt" arrives as "notify-1788592053. xt". Harmless for the
+// buttons, which are read from the live frame either way, but this text is the
+// heading on the panel and the body of the notification, and a filename with a
+// hole in it reads as a bug.
+//
+// The full render is still further up the buffer. What arrives is always a
+// *subsequence* of what is really there — characters go missing, none appear —
+// so an earlier occurrence that contains this one as a subsequence is the same
+// sentence, drawn more completely. Bounded to a few characters longer, because
+// beyond that it stops being a repaint of the same thing.
+// Only the permission prompts, which are the ones with a filename or a command
+// in them and a fixed opening to anchor on. The other boxes state their question
+// in prose, where a missing letter is not worth the risk of substituting a
+// neighbouring sentence for it.
+const askOpen = "Do you want"
+
+// A lost character arrives as a space, not as nothing: the cursor moved over the
+// cell and the flattening puts a space wherever it moved. So the damaged text is
+// the same sentence with gaps in it, and comparing with the spaces taken out is
+// what makes the two comparable.
+func repairQuestion(s, q string) string {
+	if !strings.HasPrefix(q, askOpen) {
+		return q
+	}
+	want := despace(q)
+	best, bestLen := q, len(want)
+	for _, cand := range questionRuns(s) {
+		got := despace(cand)
+		if len(got) <= bestLen || len(got) > len(want)+repairSlack {
+			continue
+		}
+		if isSubsequence(want, got) {
+			best, bestLen = cand, len(got)
+		}
+	}
+	return best
+}
+
+func despace(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\t' {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// repairSlack is how much longer a candidate may be. A repaint loses a character
+// or two; beyond that it stops being the same sentence drawn again.
+const repairSlack = 4
+
+// questionRuns returns every rendering of a question in the buffer, each cut at
+// its own question mark.
+func questionRuns(s string) []string {
+	var out []string
+	for i := 0; ; {
+		j := strings.Index(s[i:], askOpen)
+		if j < 0 {
+			return out
+		}
+		j += i
+		i = j + len(askOpen)
+
+		end := j + questionMax
+		if end > len(s) {
+			end = len(s)
+		}
+		run := s[j:end]
+		// A question ends at its mark; anything else means this rendering was
+		// cut off, and a truncated one is no use as a repair.
+		k := strings.IndexAny(run, "?\n❯")
+		if k < 0 || run[k] != '?' {
+			continue
+		}
+		out = append(out, askGap.ReplaceAllString(strings.TrimSpace(collapse(run[:k+1])), "$1"))
+	}
+}
+
+// questionMax is how far past the opening to look for the question mark.
+const questionMax = 300
 
 // cursorOnAnOption rejects the composer, which is on screen permanently and
 // carries a ❯ of its own.
@@ -281,6 +366,46 @@ func (m *Manager) Answer(id string, n int) error {
 		return fmt.Errorf("option %d is not one of the choices being offered", n)
 	}
 	return m.SendKeys(id, strconv.Itoa(n))
+}
+
+// refreshAsk notices when a session starts, or stops, waiting on a person.
+//
+// This is the whole point of running several agents at once: they do not finish
+// together, and the one that has stopped to ask you something is invisible until
+// you happen to look at it. "Waiting" was already a status, but it means two
+// entirely different things — waiting for the model, and waiting for you — and
+// only one of them is worth walking back to the desk for.
+//
+// The tail is read outside the session lock. It has its own, and taking them in
+// the wrong order here would deadlock against the reader that is filling it.
+func (m *Manager) refreshAsk(s *Session) {
+	ask, asking := ParseAsk(string(s.ring.Tail(askTail)))
+
+	s.mu.Lock()
+	was := s.needsYou
+	s.needsYou = asking
+	s.question = ""
+	if asking {
+		s.question = ask.Question
+	}
+	q := s.question
+	s.mu.Unlock()
+
+	if asking == was {
+		return
+	}
+	// Public takes the same lock, so it is called once the lock is back down.
+	pub := s.Public()
+	if asking {
+		m.emit(Event{
+			Type: "session.needs-you", SessionID: s.ID, AgentID: s.AgentID,
+			Message: q, Payload: pub,
+		})
+		return
+	}
+	// The answered case matters too: a notification that cannot be cleared is
+	// one you learn to ignore.
+	m.emit(Event{Type: "session.answered", SessionID: s.ID, AgentID: s.AgentID, Payload: pub})
 }
 
 // Interrupt stops what the agent is doing without ending the session.

@@ -186,7 +186,7 @@ function planMenu(anchor) {
 
 // ---------------------------------------------------------------- menus
 
-function rbMenu(anchor, items) {
+function rbMenu(anchor, items, footer) {
   for (const old of document.querySelectorAll('.rb-menu')) old.remove();
   const menu = el('div', { class: 'rb-menu' });
   for (const [label, onPick, active, note] of items) {
@@ -197,6 +197,7 @@ function rbMenu(anchor, items) {
       el('span', { text: label }),
       note ? el('span', { class: 'rb-menu-note', text: note }) : null));
   }
+  if (footer) menu.append(el('div', { class: 'rb-menu-foot', text: footer }));
   document.body.append(menu);
 
   const r = anchor.getBoundingClientRect();
@@ -215,11 +216,16 @@ function rbMenu(anchor, items) {
 
 function modelMenu(anchor, sessionId) {
   const current = ($('#rbModel') || {}).textContent || '';
-  rbMenu(anchor, switchableModels().map(([alias, label]) => [
+  const items = switchableModels().map(([alias, label]) => [
     label,
     () => runSlash(sessionId, '/model ' + alias, `Switching to ${label}…`),
     current.toLowerCase().startsWith(label.toLowerCase()),
-  ]));
+  ]);
+  // Said once, at the bottom, because it is true of every entry and it is not
+  // what you would assume: the CLI answers /model with "set model to X and saved
+  // as your default for new sessions". Picking one here is not only about this
+  // session, and finding that out later would be an unpleasant surprise.
+  rbMenu(anchor, items, 'Also becomes the CLI’s default for new sessions.');
 }
 
 function effortMenu(anchor, sessionId) {
@@ -267,12 +273,14 @@ function currentMode() {
 
 // runSlash sends the CLI one of its own commands.
 //
-// Through the same delivery path as a message, so it gets the same confirmation:
-// a slash command that silently failed to arrive would leave the bar showing a
-// model that was never selected.
+// Its own endpoint, not the message one. A message is confirmed by the
+// transcript growing, and a slash command never becomes a turn — so every model
+// and effort change here waited out the full delivery budget and then reported
+// "the CLI did not accept the message", over a session that had just switched
+// perfectly. A red toast on every successful action.
 async function runSlash(sessionId, cmd, note) {
   try {
-    await api(`/sessions/${sessionId}/input`, { method: 'POST', body: { data: cmd, enter: true } });
+    await api(`/sessions/${sessionId}/command`, { method: 'POST', body: { text: cmd } });
     toast(note, 'ok');
   } catch (e) {
     toast(e.message, 'bad');

@@ -49,7 +49,11 @@ new Promise(async resolve => {
   if (!settled) return resolve(JSON.stringify({ error: 'AGENT NEVER WENT IDLE' }));
   const before = !!document.querySelector('.thinking');
 
-  box.value = 'Reply with exactly: THINKING-OK';
+  // Long enough that the turn is still running when the clock is sampled below,
+  // on any model. A one-word answer from Haiku lands inside that window and the
+  // indicator correctly disappears, which then reads as a failure of the
+  // indicator rather than of the assumption.
+  box.value = 'Count from 1 to 40, one number per line, each with a short sentence about it.';
   box.dispatchEvent(new Event('input'));
   sendComposer(live.id);
 

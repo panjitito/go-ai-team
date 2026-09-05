@@ -142,6 +142,51 @@ func TestParseAskFirstRun(t *testing.T) {
 	}
 }
 
+// The box is drawn once in full and then patched, and a patch that moves the
+// cursor over a cell it is not rewriting loses that character: a real capture
+// gave "notify-1788592053. xt" for a file called notify-1788592053.txt. The full
+// render is still further up the buffer, and what arrives is always a
+// subsequence of what is really there, so it can be found again.
+func TestParseAskRepairsAHoleInTheQuestion(t *testing.T) {
+	const buf = "Do you want to create notify-1788592053.txt?\n" +
+		" 1. Yes\n 2. No\n" +
+		// The repaint, with the hole, and the live cursor.
+		"Do you want to create notify-1788592053. xt? ❯ 1. Yes 2. No Esc to cancel"
+	ask, ok := ParseAsk(buf)
+	if !ok {
+		t.Fatal("not parsed")
+	}
+	if ask.Question != "Do you want to create notify-1788592053.txt?" {
+		t.Errorf("question = %q, want the undamaged rendering", ask.Question)
+	}
+}
+
+// Repair must never substitute a different question. A longer sentence that
+// merely happens to contain this one as a subsequence is out of reach: renders
+// of the same box differ by a character or two, not by a clause.
+func TestParseAskRepairKeepsItsOwnQuestion(t *testing.T) {
+	const buf = "Do you want to create a-very-different-and-much-longer-name.txt?\n 1. Yes\n 2. No\n" +
+		"Do you want to create a.txt? ❯ 1. Yes 2. No Esc to cancel"
+	ask, ok := ParseAsk(buf)
+	if !ok {
+		t.Fatal("not parsed")
+	}
+	if ask.Question != "Do you want to create a.txt?" {
+		t.Errorf("question = %q, want the one actually on screen", ask.Question)
+	}
+}
+
+// Nothing to repair against is the normal case, and must not change anything.
+func TestParseAskRepairIsANoOpWithoutAnEarlierRender(t *testing.T) {
+	ask, ok := ParseAsk("Do you want to create only-once.txt? ❯ 1. Yes 2. No Esc to cancel")
+	if !ok {
+		t.Fatal("not parsed")
+	}
+	if ask.Question != "Do you want to create only-once.txt?" {
+		t.Errorf("question = %q", ask.Question)
+	}
+}
+
 func TestParseAskNoPrompt(t *testing.T) {
 	for _, s := range []string{
 		"",

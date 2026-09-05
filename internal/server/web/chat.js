@@ -28,6 +28,11 @@ const CHAT = {
   // that the agent has started. sentAt bounds it so it cannot stick.
   awaiting: false,
   sentAt: 0,
+  // lastId is the newest turn the last poll saw; sentAfter is what that was when
+  // Send was pressed. Comparing the two is how a reply to this message is told
+  // from the one that was already on screen.
+  lastId: '',
+  sentAfter: '',
   // thinkingSince drives the elapsed count; thinkingTimer is its ticker.
   thinkingSince: 0,
   thinkingTimer: null,
@@ -232,6 +237,8 @@ function leaveAgent() {
 function renderConversation(d, sessionId) {
   updateTermTokens(d);
   updateRunBar(d);
+  const all = d.messages || [];
+  CHAT.lastId = all.length ? (all[all.length - 1].id || '') : '';
   const banner = $('#chatBanner');
   const body = $('#chatBody');
   if (!banner || !body) return;
@@ -343,13 +350,19 @@ function syncThinking(d) {
   // the optimistic flag set on send has done its job.
   if (working) CHAT.awaiting = false;
 
-  // The flag covers the gap before the first poll notices. It cannot stick:
-  // an assistant turn arriving after the send clears it, and so does a wait
-  // long enough that nothing can plausibly still be starting.
+  // The flag covers the gap before the first poll notices. It cannot stick: a
+  // *new* assistant turn clears it, and so does a wait long enough that nothing
+  // can plausibly still be starting.
+  //
+  // "New" is by identity, not by clock. This used to accept any assistant turn
+  // stamped within a second of the send, so sending a follow-up just after the
+  // agent finished cleared the flag on the very next poll — the indicator
+  // appeared and vanished again before the CLI had even been handed the message.
+  // The transcript's timestamp and the browser's clock are two different clocks
+  // besides, which is a poor thing to compare across.
   if (CHAT.awaiting) {
     const last = d.messages && d.messages.length ? d.messages[d.messages.length - 1] : null;
-    const replied = last && last.role === 'assistant' &&
-      last.when && new Date(last.when).getTime() >= CHAT.sentAt - 1000;
+    const replied = last && last.role === 'assistant' && last.id && last.id !== CHAT.sentAfter;
     if (replied || Date.now() - CHAT.sentAt > 30000) CHAT.awaiting = false;
   }
 
@@ -669,6 +682,7 @@ async function sendComposer(sessionId) {
   // is asking themselves whether the message went anywhere at all.
   CHAT.awaiting = true;
   CHAT.sentAt = Date.now();
+  CHAT.sentAfter = CHAT.lastId;
   CHAT.thinkingSince = Date.now();
   showThinking(true, '');
 

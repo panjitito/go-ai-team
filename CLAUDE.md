@@ -77,6 +77,24 @@ Writing Go or JS source through a bash heredoc into Python mangles backslash
 escapes: `\n` and `\x1b` end up as real bytes inside string literals and break
 the file. Use the Write or Edit tools for content containing escapes.
 
+## `open(path, 'w')` truncates before the write is evaluated
+
+This one-liner pattern for scripted edits has destroyed a source file in this
+repo:
+
+```python
+io.open(p, 'w').write(s.replace(old, new))   # never do this
+```
+
+Python opens the file — truncating it to zero — and *then* evaluates the
+argument. If that expression raises for any reason (a typo in a variable name
+did it here), the file is already empty and the exception looks like the edit
+simply did not happen. `node --check` passes on an empty file, so the next thing
+that runs may well look fine too.
+
+Build the string first, assert on it, and only then open the file. Better still,
+use the Edit tool, which cannot half-apply.
+
 ## Do not edit prose with perl or sed
 
 Multi-line `perl -0pi -e 's|...|...|'` over Markdown has silently welded table

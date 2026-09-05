@@ -130,6 +130,11 @@ type Session struct {
 	// inputReady is set once the CLI has been seen to settle, after which
 	// prompts are written without waiting.
 	inputReady bool
+	// needsYou is true while the CLI has a question on screen, and question is
+	// what it is asking. Kept on the session rather than recomputed by every
+	// caller so the poll can notice the moment it changes and say so.
+	needsYou bool
+	question string
 }
 
 // Manager owns every live session.
@@ -593,6 +598,12 @@ type PublicSession struct {
 	TotalTokens     int64               `json:"totalTokens"`
 	CacheHitRate    float64             `json:"cacheHitRate"`
 	IdleSeconds     int                 `json:"idleSeconds"`
+
+	// NeedsYou is true while the CLI is asking something, and Question is what.
+	// "waiting" covers both waiting for the model and waiting for a person, and
+	// only one of those is worth walking back to the desk for.
+	NeedsYou bool   `json:"needsYou"`
+	Question string `json:"question,omitempty"`
 }
 
 // Public snapshots the session for the API.
@@ -616,6 +627,7 @@ func (s *Session) Public() PublicSession {
 		SwitchCount:     s.SwitchCount, SwitchLog: logCopy,
 		Tokens: s.Tokens, TotalTokens: s.Tokens.Total(),
 		CacheHitRate: s.Tokens.CacheHitRate(), IdleSeconds: idle,
+		NeedsYou: s.needsYou, Question: s.question,
 	}
 }
 
@@ -645,6 +657,9 @@ func (m *Manager) refresh(s *Session) {
 	// "which agent is waiting on me" is precisely the question the dashboard
 	// exists to answer — so this can never be gated behind finding a file.
 	defer m.refreshStatus(s)
+	// Before the early returns below: an agent stopped at a question has usually
+	// written no transcript for it, and that is exactly the one worth noticing.
+	defer m.refreshAsk(s)
 
 	if provider != store.ProviderClaude || pid == 0 {
 		return

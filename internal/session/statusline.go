@@ -60,11 +60,21 @@ var (
 	// capture — so requiring a boundary silently read the model from an older
 	// render further up the buffer. Dropping it can only add matches, and the
 	// ones it adds are exactly these.
-	slModel    = regexp.MustCompile(`(?i)(Opus|Sonnet|Haiku|Fable)\s*([\d.]+)`)
-	slContext  = regexp.MustCompile(`ctx:\s*(\d+)%`)
-	slFiveHour = regexp.MustCompile(`5h:\s*(\d+)%`)
-	slWeekly   = regexp.MustCompile(`wk:\s*(\d+)%`)
-	slCost     = regexp.MustCompile(`\$\s*(\d+\.\d+)`)
+	//
+	// Two of them, and the order matters. A repaint can run the next thing on the
+	// line straight into the version — "Haiku 4.5" with "2." from whatever
+	// followed — and a greedy [\d.]+ swallowed that whole, so the bar read
+	// "Haiku 4.52.". The strict pattern requires the version to end at a token
+	// boundary, which the garbled one does not, and the buffer holds dozens of
+	// clean renders to find instead. The loose one is still there for a terminal
+	// that only ever produced the awkward reading: a slightly wrong version beats
+	// no model at all.
+	slModel      = regexp.MustCompile(`(?i)(Opus|Sonnet|Haiku|Fable)\s*(\d+(?:\.\d+)?)(?:\s|$)`)
+	slModelLoose = regexp.MustCompile(`(?i)(Opus|Sonnet|Haiku|Fable)\s*(\d+(?:\.\d+)*)`)
+	slContext    = regexp.MustCompile(`ctx:\s*(\d+)%`)
+	slFiveHour   = regexp.MustCompile(`5h:\s*(\d+)%`)
+	slWeekly     = regexp.MustCompile(`wk:\s*(\d+)%`)
+	slCost       = regexp.MustCompile(`\$\s*(\d+\.\d+)`)
 )
 
 // ParseStatusLine pulls what it can from the tail of a terminal.
@@ -75,7 +85,11 @@ func ParseStatusLine(tail string) StatusLine {
 	clean := stripANSI(tail)
 	var s StatusLine
 
-	if m := lastMatch(clean, slModel); m != nil {
+	m := lastMatch(clean, slModel)
+	if m == nil {
+		m = lastMatch(clean, slModelLoose)
+	}
+	if m != nil {
 		// Title-case the family so "haiku 4.5" and "Haiku 4.5" read the same.
 		s.Model = strings.ToUpper(m[1][:1]) + strings.ToLower(m[1][1:]) + " " + m[2]
 	}

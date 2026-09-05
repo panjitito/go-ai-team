@@ -225,6 +225,16 @@ func runDesktop(app *app, url string, sig <-chan os.Signal) error {
 
 	done := make(chan struct{})
 	defer close(done)
+
+	// Flash the taskbar button when an agent stops to ask something.
+	//
+	// This is the payoff for running several at once: they do not finish
+	// together, and the one that has stopped for an answer is invisible until
+	// you happen to look at it. Deliberately a flash and not a focus grab — an
+	// agent's question is not a reason to yank the cursor out of whatever is
+	// being typed somewhere else.
+	go watchForQuestions(app.sm, done)
+
 	closer := make(chan func(), 1)
 	go func() {
 		// Wait for the window to exist before there is anything to close. A
@@ -260,6 +270,42 @@ func runDesktop(app *app, url string, sig <-chan os.Signal) error {
 			})
 		},
 	})
+}
+
+// watchForQuestions asks the window for attention while any agent is waiting on
+// a person, and clears it once none are.
+//
+// It tracks the set rather than counting events, because the two are not
+// symmetric: a session that exits while its question is on screen never sends
+// the matching "answered", and a counter would sit at one for ever with nothing
+// to clear it.
+func watchForQuestions(sm *session.Manager, done <-chan struct{}) {
+	events, unsubscribe := sm.Subscribe()
+	defer unsubscribe()
+
+	waiting := map[string]bool{}
+	for {
+		select {
+		case <-done:
+			return
+		case e, ok := <-events:
+			if !ok {
+				return
+			}
+			switch e.Type {
+			case "session.needs-you":
+				if !waiting[e.SessionID] {
+					waiting[e.SessionID] = true
+					desktop.Attention()
+				}
+			case "session.answered", "session.exited", "session.removed":
+				delete(waiting, e.SessionID)
+				if len(waiting) == 0 {
+					desktop.StopAttention()
+				}
+			}
+		}
+	}
 }
 
 // app holds the assembled subsystems.

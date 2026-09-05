@@ -98,6 +98,27 @@ func TestParseStatusLineAbsentFields(t *testing.T) {
 	}
 }
 
+// A repaint can run the next thing on the line into the version, and the last
+// occurrence in the buffer is then the garbled one. "Haiku 4.52." in the run bar
+// came from a live session that had said "Haiku 4.5" cleanly a dozen times
+// first, which is what makes the boundary worth requiring.
+func TestParseStatusLineIgnoresAGarbledVersion(t *testing.T) {
+	const buf = "work Haiku 4.5 $0.00 5h:5% wk:6%\n" +
+		"work Haiku 4.5 ctx:5% $0.01 5h:5% wk:6%\n" +
+		"work Haiku 4.52."
+	if got := ParseStatusLine(buf).Model; got != "Haiku 4.5" {
+		t.Errorf("model = %q, want Haiku 4.5", got)
+	}
+}
+
+// But a terminal that only ever produced the awkward reading still gets a model
+// out of it: something slightly wrong beats an em-dash.
+func TestParseStatusLineFallsBackToTheLooseReading(t *testing.T) {
+	if got := ParseStatusLine("work Haiku 4.52.").Model; got == "" {
+		t.Error("no model at all from a line that plainly names one")
+	}
+}
+
 func TestParseStatusLineModelNames(t *testing.T) {
 	cases := map[string]string{
 		"Opus 5 (1M context)": "Opus 5",
@@ -105,6 +126,7 @@ func TestParseStatusLineModelNames(t *testing.T) {
 		"Haiku4.5":            "Haiku 4.5",
 		"Fable 5.1":           "Fable 5.1",
 		"opus 4.8":            "Opus 4.8",
+		"Sonnet 5 · ←":        "Sonnet 5",
 	}
 	for in, want := range cases {
 		if got := ParseStatusLine(in).Model; got != want {

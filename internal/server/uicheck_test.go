@@ -147,6 +147,11 @@ func (c *chrome) openTarget(t *testing.T, url string) {
 	c.waitEvent(t, "Page.loadEventFired", 30*time.Second)
 }
 
+// cdpReadBudget bounds one Runtime.evaluate. Longer than any scenario in here,
+// so an over-run is reported by the test that over-ran rather than as a socket
+// error from the harness.
+const cdpReadBudget = 240 * time.Second
+
 // call sends one CDP command and returns its result, ignoring the events that
 // arrive interleaved with it.
 func (c *chrome) call(t *testing.T, method string, params map[string]any) map[string]any {
@@ -161,7 +166,13 @@ func (c *chrome) call(t *testing.T, method string, params map[string]any) map[st
 		t.Fatalf("CDP write %s: %v", method, err)
 	}
 
-	_ = c.conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+	// Generous, because some of these evaluate a whole scenario in the page —
+	// wait for an agent to go idle, send it a prompt, wait for a real model to
+	// answer. When that ran past the deadline the failure read as "CDP read: i/o
+	// timeout", which says nothing about the app and sent me looking in the
+	// wrong place. A test that is genuinely stuck still fails, on its own
+	// timeout, with its own message.
+	_ = c.conn.SetReadDeadline(time.Now().Add(cdpReadBudget))
 	for {
 		var raw map[string]any
 		if err := c.conn.ReadJSON(&raw); err != nil {
@@ -497,6 +508,78 @@ new Promise(async resolve => {
 })()`)
 	if got != "ok" {
 		t.Errorf("thinking block: %s", got)
+	}
+}
+
+// TestUINeedsYou marks the agent that has stopped to ask something.
+//
+// The point of running several at once is that they do not finish together, so
+// the one waiting on a person has to be findable without opening each in turn.
+// Three places say so: the card, the pill on it, and the window caption — the
+// last of which is readable from the taskbar without the app in front of you.
+func TestUINeedsYou(t *testing.T) {
+	const port = 7809
+	startServer(t, port)
+
+	c := launchChrome(t)
+	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
+
+	if ready := c.evalString(t, `
+new Promise(async resolve => {
+  for (let i = 0; i < 60; i++) {
+    if (typeof updateWaitingCount === 'function' && typeof agentCard === 'function') return resolve('ready');
+    await new Promise(r => setTimeout(r, 250));
+  }
+  resolve('timeout');
+})`); ready != "ready" {
+		t.Fatalf("the UI never finished loading: %s", ready)
+	}
+
+	got := c.evalString(t, `(() => {
+  const agent = { id: 'agt_x', projectId: 'prj_x', name: 'Probe', role: 'Backend', color: '#8b5cf6' };
+  S.agents = [agent];
+  const base = { id: 'ses_x', agentId: 'agt_x', kind: 'agent', status: 'waiting',
+                 accountName: 'acct', accountColor: '#888', switchLog: [] };
+
+  // Waiting on the model: ordinary, and must stay ordinary.
+  S.sessions = [{ ...base }];
+  let card = agentCard(agent);
+  if (card.classList.contains('asking')) return 'PLAIN WAITING WAS MARKED';
+  if (card.textContent.includes('needs you')) return 'PLAIN WAITING SAYS NEEDS YOU';
+  updateWaitingCount();
+  if (document.title !== 'Go AI Team') return 'TITLE COUNTED A PLAIN WAIT: ' + document.title;
+
+  // Waiting on a person.
+  S.sessions = [{ ...base, needsYou: true, question: 'Do you want to create hello.txt?' }];
+  card = agentCard(agent);
+  if (!card.classList.contains('asking')) return 'CARD NOT MARKED';
+  if (!card.textContent.includes('needs you')) return 'PILL MISSING';
+  const pill = card.querySelector('.pill.needs-you');
+  if (!pill) return 'PILL NOT STYLED';
+  if (!(pill.getAttribute('title') || '').includes('hello.txt')) return 'QUESTION NOT ON HOVER';
+  updateWaitingCount();
+  if (document.title !== '(1) Go AI Team') return 'TITLE: ' + document.title;
+
+  // Two of them, and then none.
+  S.sessions = [
+    { ...base, needsYou: true },
+    { ...base, id: 'ses_y', agentId: 'agt_y', needsYou: true },
+  ];
+  updateWaitingCount();
+  if (document.title !== '(2) Go AI Team') return 'TITLE FOR TWO: ' + document.title;
+
+  // An exited session cannot still be waiting on you.
+  S.sessions = [{ ...base, needsYou: true, status: 'exited' }];
+  updateWaitingCount();
+  if (document.title !== 'Go AI Team') return 'EXITED STILL COUNTED: ' + document.title;
+
+  S.sessions = [];
+  S.agents = [];
+  updateWaitingCount();
+  return 'ok';
+})()`)
+	if got != "ok" {
+		t.Errorf("needs-you marking: %s", got)
 	}
 }
 

@@ -44,6 +44,19 @@ new Promise(async resolve => {
   openTerm(live.id);
   for (let i = 0; i < 60; i++) { await sleep(400); if (document.querySelector('#composerBox')) break; }
 
+  // Start from a session that is genuinely finished with whatever it was doing.
+  // A prompt sent into a running turn queues behind it, and everything measured
+  // below then happens on somebody else's clock.
+  //
+  // Kept well inside the CDP read deadline: everything here runs as one
+  // Runtime.evaluate, so a long wait in the page shows up as a socket timeout in
+  // the harness rather than as anything about the app.
+  for (let i = 0; i < 30; i++) {
+    const d = await api('/sessions/' + live.id + '/conversation');
+    if (d.status !== 'working' && d.status !== 'starting' && !d.ask) break;
+    await sleep(1000);
+  }
+
   // Manual mode, or the auto-mode classifier may simply decide this is safe and
   // never ask — and then there is nothing to test.
   const conv0 = await api('/sessions/' + live.id + '/conversation');
@@ -52,8 +65,13 @@ new Promise(async resolve => {
   await api('/sessions/' + live.id + '/mode', { method: 'POST', body: { mode: 'manual' } });
   await sleep(1500);
 
+  // In the project, explicitly. "Create a file named X" is ambiguous, and
+  // Claude Code has a scratchpad of its own that needs no permission to write
+  // to — so an under-specified prompt sometimes produced a file, no question,
+  // and a puzzling failure here that was nothing to do with the panel.
   const box = document.querySelector('#composerBox');
-  box.value = 'Create a file named %s containing the word ok. Nothing else.';
+  box.value = 'Create a file at ./%s inside the current working directory, ' +
+    'containing the word ok. Not in your scratchpad. Nothing else.';
   box.dispatchEvent(new Event('input'));
   await sendComposer(live.id);
 

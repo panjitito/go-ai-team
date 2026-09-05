@@ -361,6 +361,14 @@ table.kv tr:last-child td { border-bottom: none; }
 }
 .toast.bad { border-color: #5b2a2a; background: #2a1618; color: #ffd4d4; }
 .toast.ok { border-color: #24523a; background: #14251c; color: #ccf5dc; }
+.toast.warn { border-color: #5a4420; background: #2a2114; color: #ffd08a; }
+.toast.clickable { cursor: pointer; }
+.toast.clickable:hover { border-color: var(--brand); }
+
+/* An agent stopped at a question. The only card on the screen that wants you
+   to walk back to the desk, so it is the only one that is allowed to glow. */
+.card.asking { border-color: #3d6d92; box-shadow: 0 0 0 1px #3d6d92 inset; }
+.pill.needs-you { border-color: #3d6d92; color: #cfe6ff; background: #16202b; }
 @keyframes slidein { from { opacity: 0; transform: translateX(14px) } }
 
 .mono { font-family: var(--mono); }
@@ -1103,6 +1111,10 @@ body.dnd-active .drop-root { display: block; }
 .rb-menu-item.active { color: var(--brand); font-weight: 600; }
 .rb-menu-item { display: flex; flex-direction: column; gap: 2px; max-width: 300px; }
 .rb-menu-note { color: var(--fg-mute); font-size: 10.5px; font-weight: 400; line-height: 1.4; }
+.rb-menu-foot {
+  border-top: 1px solid var(--line); margin-top: 3px; padding: 6px 10px 2px;
+  color: var(--fg-mute); font-size: 10.5px; line-height: 1.4; max-width: 260px;
+}
 
 /* The plan. Wide enough to read the step it is on, and it truncates rather
    than pushing the meters off the end of the bar. */
