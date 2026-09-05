@@ -34,10 +34,13 @@ type Hit struct {
 	SessionID string `json:"sessionId"`
 	// Dir is the account directory the conversation lives in, and Project is the
 	// working directory it ran in.
-	Dir     string    `json:"dir"`
-	Project string    `json:"project"`
-	When    time.Time `json:"when"`
-	Role    string    `json:"role"`
+	Dir     string `json:"dir"`
+	Project string `json:"project"`
+	// Sub names the subagent whose own transcript this came from, empty when the
+	// hit is in the conversation itself.
+	Sub  string    `json:"sub,omitempty"`
+	When time.Time `json:"when"`
+	Role string    `json:"role"`
 	// Snippet is the matching text with a little either side; Text is the whole
 	// message, capped, for when the snippet is not enough.
 	Snippet string `json:"snippet"`
@@ -130,10 +133,21 @@ type transcript struct {
 	path    string
 	dir     string
 	project string
-	mod     time.Time
+	session string
+	// sub is the name of a subagent's own transcript, empty for the
+	// conversation itself.
+	sub string
+	mod time.Time
 }
 
 // searchFiles lists the transcripts to look at, newest first.
+//
+// Recursively, because most of them are not where you would first look. A
+// conversation is `<project>/<id>.jsonl`, but beside it sits `<project>/<id>/`
+// holding `subagents/…/agent-*.jsonl` — one per subagent the conversation
+// spawned — and on this machine that is 858 files of the 1,127 there are. The
+// main transcript records only that a subagent ran, so searching the top level
+// alone would miss most of the work and all of the detail.
 func searchFiles(dirs []string, cwd string) []transcript {
 	var out []transcript
 	for _, dir := range dirs {
@@ -155,28 +169,43 @@ func searchFiles(dirs []string, cwd string) []transcript {
 			}
 		}
 		for _, root := range roots {
-			entries, err := os.ReadDir(root)
-			if err != nil {
-				continue
-			}
-			for _, e := range entries {
-				if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
-					continue
-				}
-				fi, err := e.Info()
-				if err != nil {
-					continue
-				}
-				out = append(out, transcript{
-					path:    filepath.Join(root, e.Name()),
-					dir:     dir,
-					project: filepath.Base(root),
-					mod:     fi.ModTime(),
-				})
-			}
+			out = append(out, walkTranscripts(root, dir)...)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].mod.After(out[j].mod) })
+	return out
+}
+
+func walkTranscripts(root, dir string) []transcript {
+	var out []transcript
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(p) != ".jsonl" {
+			return nil
+		}
+		fi, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return nil
+		}
+		// The conversation this belongs to: its own name at the top level, and
+		// the directory it lives under anywhere below that — which is the
+		// parent conversation's id, so a hit in a subagent still leads back to
+		// the session that ran it.
+		session := strings.TrimSuffix(filepath.Base(p), ".jsonl")
+		sub := ""
+		if parts := strings.Split(filepath.ToSlash(rel), "/"); len(parts) > 1 {
+			session = parts[0]
+			sub = strings.TrimSuffix(filepath.Base(p), ".jsonl")
+		}
+		out = append(out, transcript{
+			path: p, dir: dir, project: filepath.Base(root),
+			session: session, sub: sub, mod: fi.ModTime(),
+		})
+		return nil
+	})
 	return out
 }
 
@@ -192,7 +221,6 @@ func scanTranscript(f transcript, needle []byte, limit int, res *SearchResult) i
 	sc := bufio.NewScanner(fh)
 	sc.Buffer(make([]byte, 0, 256<<10), searchLineCap)
 
-	sessionID := strings.TrimSuffix(filepath.Base(f.path), ".jsonl")
 	var read int64
 	lower := make([]byte, 0, 64<<10)
 
@@ -210,7 +238,7 @@ func scanTranscript(f transcript, needle []byte, limit int, res *SearchResult) i
 		if !bytes.Contains(lower, needle) {
 			continue
 		}
-		if h, ok := hitFrom(line, needle, sessionID, f); ok {
+		if h, ok := hitFrom(line, needle, f); ok {
 			res.Hits = append(res.Hits, h)
 			if len(res.Hits) >= limit {
 				return read
@@ -234,7 +262,7 @@ func asciiLower(b []byte) {
 }
 
 // hitFrom turns a matching line into a hit, or says the match was plumbing.
-func hitFrom(line, needle []byte, sessionID string, f transcript) (Hit, bool) {
+func hitFrom(line, needle []byte, f transcript) (Hit, bool) {
 	var cl convLine
 	if err := json.Unmarshal(line, &cl); err != nil {
 		return Hit{}, false
@@ -252,9 +280,10 @@ func hitFrom(line, needle []byte, sessionID string, f transcript) (Hit, bool) {
 		}
 		when, _ := time.Parse(time.RFC3339, cl.Timestamp)
 		return Hit{
-			SessionID: sessionID,
+			SessionID: f.session,
 			Dir:       f.dir,
 			Project:   f.project,
+			Sub:       f.sub,
 			When:      when,
 			Role:      role,
 			Snippet:   snippetAround(part, at, len(needle)),

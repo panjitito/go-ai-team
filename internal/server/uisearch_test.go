@@ -55,7 +55,7 @@ new Promise(async resolve => {
           role: 'assistant', account: 'work', liveSession: 's1', agentName: 'Backend worker',
           snippet: '…the ROUNDING was in the <tax> column…',
           text: 'the ROUNDING was in the <tax> column, and the fix is one line.' },
-        { sessionId: 'bbbbbbbb-2222', dir: 'C:/u/.claude-ep',
+        { sessionId: 'bbbbbbbb-2222', dir: 'C:/u/.claude-ep', sub: 'agent-a19',
           when: new Date(Date.now() - 3 * 86400000).toISOString(),
           role: 'user', account: 'spare', snippet: 'please fix the rounding',
           text: 'please fix the rounding' },
@@ -98,6 +98,7 @@ new Promise(async resolve => {
     out.when = [...document.querySelectorAll('.find-when')].map(n => n.textContent);
     out.buttons = items.map(n => !!n.querySelector('button'));
     out.oldLabel = (document.querySelector('.find-old') || {}).textContent;
+    out.subPills = items.map(n => [...n.querySelectorAll('.pill')].map(p => p.textContent).join(','));
     out.foot = (document.querySelector('#findFoot') || {}).textContent;
 
     // Clicking opens the message out; clicking again folds it away.
@@ -195,6 +196,7 @@ new Promise(async r => {
 		When              []string `json:"when"`
 		Buttons           []bool   `json:"buttons"`
 		OldLabel          string   `json:"oldLabel"`
+		SubPills          []string `json:"subPills"`
 		Foot              string   `json:"foot"`
 		Expanded          bool     `json:"expanded"`
 		ExpandedText      string   `json:"expandedText"`
@@ -243,6 +245,11 @@ new Promise(async r => {
 	}
 	if !strings.Contains(r.OldLabel, "bbbbbbbb") {
 		t.Errorf("the old conversation is not identified: %q", r.OldLabel)
+	}
+	// Most transcripts on disk are a subagent's, and a hit in one is a different
+	// claim from a hit in the conversation.
+	if len(r.SubPills) != 2 || r.SubPills[0] != "assistant" || r.SubPills[1] != "user,subagent" {
+		t.Errorf("row labels = %v", r.SubPills)
 	}
 	if !strings.Contains(r.Foot, "2 matches") || !strings.Contains(r.Foot, "12 of 40") {
 		t.Errorf("footer = %q, want what was found and how much was read", r.Foot)

@@ -196,3 +196,43 @@ func TestSearchDeadline(t *testing.T) {
 		t.Error("an expired deadline did not stop the search")
 	}
 }
+
+// Most transcripts are not where you would first look.
+//
+// A conversation is <project>/<id>.jsonl, and beside it <project>/<id>/ holds
+// one transcript per subagent it spawned. On the machine this was written for
+// that nesting holds 858 of the 1,127 files, so searching only the top level
+// would miss most of the work — and a hit inside one still has to lead back to
+// the conversation that ran it, not to a file name nothing else knows about.
+func TestSearchReachesSubagents(t *testing.T) {
+	home := t.TempDir()
+	cwd := `C:\proj\mis`
+	writeTranscript(t, home, cwd, "parent-uuid",
+		searchAssistantLine("2026-09-01T10:00:00Z", "I will get a subagent to look at the kestrel."))
+
+	deep := filepath.Join(home, "projects", EncodeCWD(cwd),
+		"parent-uuid", "subagents", "workflows", "wf_abc")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := searchAssistantLine("2026-09-02T11:00:00Z", "the kestrel is in Reports/Tax.php")
+	if err := os.WriteFile(filepath.Join(deep, "agent-a19.jsonl"), []byte(line+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Search(SearchOpts{Dirs: []string{home}, CWD: cwd, Query: "kestrel"})
+	if len(got.Hits) != 2 {
+		t.Fatalf("%d hits, want the conversation and the subagent: %+v", len(got.Hits), got.Hits)
+	}
+	sub := got.Hits[0]
+	if sub.Sub != "agent-a19" {
+		t.Errorf("the subagent hit is not marked as one: %q", sub.Sub)
+	}
+	// The id that leads somewhere is the conversation's, not the file's.
+	if sub.SessionID != "parent-uuid" {
+		t.Errorf("subagent hit points at %q, want the conversation that ran it", sub.SessionID)
+	}
+	if got.Hits[1].Sub != "" {
+		t.Errorf("the conversation's own hit is marked as a subagent: %q", got.Hits[1].Sub)
+	}
+}

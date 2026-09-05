@@ -128,6 +128,10 @@ function findRow(h, q) {
   const row = el('div', { class: 'find-item' + (h.liveSession ? ' go' : '') },
     el('div', { class: 'find-meta' },
       el('span', { class: 'pill' }, h.role || '—'),
+      // Said by a subagent, which is a different claim from said by the agent:
+      // most of the transcripts on disk are these, and the conversation itself
+      // records only that one ran.
+      h.sub ? el('span', { class: 'pill', title: h.sub }, 'subagent') : null,
       el('span', { class: 'find-who', text: who }),
       when ? el('span', { class: 'find-when mono', text: whenLabel(when) }) : null,
       h.account ? el('span', { class: 'find-acct', text: h.account }) : null,
