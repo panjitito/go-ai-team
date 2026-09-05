@@ -76,11 +76,17 @@ function openAgent(sessionId, mode) {
   const agent = sess.agentId ? agentById(sess.agentId) : null;
   const title = agent ? agent.name : (sess.label || (sess.kind === 'login' ? 'Sign in' : 'Terminal'));
 
+  // The conversation and the file rail sit side by side; the header and the
+  // composer span both, because one names the session and the other is where you
+  // type — neither belongs to a column.
   const wrap = el('div', { class: 'chat-wrap' },
     chatHeader(sess, title),
-    el('div', { class: 'chat-banner', id: 'chatBanner', style: 'display:none' }),
-    el('div', { class: 'chat-body', id: 'chatBody' }),
-    el('div', { class: 'term-host', id: 'termHost', style: 'display:none' }),
+    el('div', { class: 'chat-split' },
+      el('div', { class: 'chat-col' },
+        el('div', { class: 'chat-banner', id: 'chatBanner', style: 'display:none' }),
+        el('div', { class: 'chat-body', id: 'chatBody' }),
+        el('div', { class: 'term-host', id: 'termHost', style: 'display:none' })),
+      el('div', { class: 'chat-rail', id: 'chatRail', style: 'display:none' })),
     composer(sessionId));
   main.append(wrap);
   // After mounting, so the drop zone can find the conversation area.
@@ -165,6 +171,10 @@ function chatHeader(sess, title) {
       class: 'btn ghost sm', title: 'Rewind — restore the code and conversation to an earlier point',
       onclick: () => openRewind(sessionId),
     }, '⟲') : null,
+    conversational(sess) ? el('button', {
+      class: 'btn ghost sm', id: 'railBtn', title: 'Files this agent has changed',
+      onclick: toggleRail,
+    }, '📄', el('span', { class: 'rail-badge', id: 'railCount', style: 'display:none' })) : null,
     // Interrupt is not Stop, and putting them side by side is the point: one
     // ends the turn, the other ends the session. It only appears while there is
     // a turn to interrupt.
@@ -246,6 +256,7 @@ function renderConversation(d, sessionId) {
   updateRunBar(d);
   const all = d.messages || [];
   CHAT.lastId = all.length ? (all[all.length - 1].id || '') : '';
+  renderRail(d, sessionId);
   const banner = $('#chatBanner');
   const body = $('#chatBody');
   if (!banner || !body) return;

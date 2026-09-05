@@ -37,6 +37,11 @@ type conversationResp struct {
 
 	Status session.Status `json:"status"`
 
+	// Files is what this agent has written to, newest first. Collected from its
+	// own tool calls rather than from git: the two answer different questions,
+	// and "what did this agent change" is the one being asked here.
+	Files []claudefs.EditedFile `json:"files"`
+
 	// Tasks is the agent's own plan, rebuilt from the TaskCreate/TaskUpdate calls
 	// in the transcript. The CLI shows this as it works and the app showed
 	// nothing, which across a row of agents is the difference between knowing
@@ -75,6 +80,7 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 	out := conversationResp{
 		Messages:     []claudefs.Message{},
 		Tasks:        []claudefs.Task{},
+		Files:        []claudefs.EditedFile{},
 		SessionID:    p.ClaudeSessionID,
 		Status:       p.Status,
 		Line:         s.sm.StatusLineOf(sess.ID),
@@ -104,6 +110,9 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 				out.Ready = true
 				if tasks := claudefs.Tasks(out.Messages); len(tasks) > 0 {
 					out.Tasks = tasks
+				}
+				if files := claudefs.EditedFiles(out.Messages, p.CWD); len(files) > 0 {
+					out.Files = files
 				}
 			}
 		}
