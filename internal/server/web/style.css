@@ -964,3 +964,36 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
   .thinking-dots i { animation: think-fade 1.6s ease-in-out infinite; }
   @keyframes think-fade { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 }
+
+/* ---------- dragging things into folders ---------- */
+
+.tree-item[draggable="true"] { cursor: grab; }
+.tree-item.dragging { opacity: .45; cursor: grabbing; }
+
+/* The target you are over. An outline rather than a fill, so the row's own
+   colours — the account dot especially — stay readable while hovering. */
+.tree-item.drop-into {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  background: var(--bg-3);
+}
+
+/* Somewhere to drop a thing to take it back out of a folder. Hidden until a
+   drag starts: the rest of the time it is an empty box asking to be explained. */
+.drop-root {
+  display: none;
+  margin: 8px 4px 4px;
+  padding: 10px 8px;
+  border: 1px dashed var(--line-2);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-mute);
+}
+body.dnd-active .drop-root { display: block; }
+.drop-root.drop-into {
+  border-color: var(--brand);
+  border-style: solid;
+  color: var(--fg);
+  background: var(--bg-2);
+}

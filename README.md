@@ -52,6 +52,7 @@ point, since the alternative charges per month for a few hundred of them.
 | **Attach what you have** | Point at `~/.claude`, a CCS profile, or any directory with credentials — reused as-is, no re-login. |
 | **Discovery** | Scans for provider defaults, CCS instances and `~/.claude-*` siblings. |
 | **The cascade** | `agent override → project pin → nearest folder that pins one → global default → ~/.claude`. Unit-tested in every direction, including folder cycles and dangling references. |
+| **Drag to organise** | Drag a project onto a folder to file it, or onto the drop zone to take it back out; folders nest the same way. A folder cannot be dropped inside itself or its own descendants — that would leave the subtree alive, still pinned to accounts, and unreachable — and the server refuses it too, not just the sidebar. |
 | **Verified binding** | Once the CLI writes its own session file, the badge shows the account it *actually* used, not the one we intended. |
 | **Honest sign-in state** | Distinguishes signed in from signed out from never signed in — see below, because the obvious check is wrong. |
 | **Auto-switch** | At a usage limit: bench the account, copy the transcript into another one, resume the same session there, tell the agent to continue. |

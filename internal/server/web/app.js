@@ -266,24 +266,41 @@ function renderSidebar() {
         title: acct ? `pinned to ${acct.name}` : 'inherits the cascade' }),
       el('span', { class: 'name', text: p.name, title: p.path }),
       live ? el('span', { class: 'count', text: String(live) }) : null);
+    dndDraggable(row, 'project', p.id);
+    return row;
+  };
+
+  const drawFolder = (f, nested) => {
+    const acct = accountById(f.accountId);
+    const row = el('div', {
+      class: 'tree-item folder' + (nested ? ' nested' : ''),
+      onclick: () => editFolder(f),
+    },
+      el('span', { class: 'acct-dot', style: `background:${acct ? acct.color : '#3a4250'}`,
+        title: acct ? `folder pinned to ${acct.name}` : 'no folder pin' }),
+      el('span', { class: 'name', text: f.name }),
+      nested ? null : el('span', { class: 'src-badge', text: 'folder' }));
+    dndDraggable(row, 'folder', f.id);
+    dndTarget(row, f.id);
     return row;
   };
 
   for (const f of rootFolders) {
-    const acct = accountById(f.accountId);
-    sb.append(el('div', { class: 'tree-item folder', onclick: () => editFolder(f) },
-      el('span', { class: 'acct-dot', style: `background:${acct ? acct.color : '#3a4250'}`,
-        title: acct ? `folder pinned to ${acct.name}` : 'no folder pin' }),
-      el('span', { class: 'name', text: f.name }),
-      el('span', { class: 'src-badge', text: 'folder' })));
+    sb.append(drawFolder(f, false));
     for (const p of S.projects.filter(p => p.folderId === f.id)) sb.append(drawProject(p, true));
     for (const sub of S.folders.filter(x => x.parentId === f.id)) {
-      sb.append(el('div', { class: 'tree-item folder nested', onclick: () => editFolder(sub) },
-        el('span', { class: 'name', text: sub.name })));
+      sb.append(drawFolder(sub, true));
       for (const p of S.projects.filter(p => p.folderId === sub.id)) sb.append(drawProject(p, true));
     }
   }
   for (const p of S.projects.filter(p => !p.folderId)) sb.append(drawProject(p, false));
+
+  // Somewhere to drop a thing to take it back out of a folder. It only appears
+  // while something is being dragged, because the rest of the time it is an
+  // empty box asking to be explained.
+  const root = el('div', { class: 'drop-root' }, 'Drag here to take out of a folder');
+  dndTarget(root, '');
+  sb.append(root);
 
   if (!S.projects.length) {
     sb.append(el('div', { class: 'hint', style: 'padding:10px 8px' },

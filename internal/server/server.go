@@ -518,6 +518,25 @@ func (s *Server) patchFolder(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	// A folder cannot be moved inside itself, or inside anything already inside
+	// it. The subtree would still exist, still be pinned to its accounts, and be
+	// unreachable from the root — invisible rather than deleted, which is worse.
+	//
+	// The sidebar refuses to offer such a drop, but the check belongs here: the
+	// UI is not the only thing that can call this.
+	if req.ParentID != nil && *req.ParentID != "" {
+		id := r.PathValue("id")
+		if *req.ParentID == id {
+			writeErr(w, http.StatusBadRequest, errors.New("a folder cannot be put inside itself"))
+			return
+		}
+		if s.folderContains(id, *req.ParentID) {
+			writeErr(w, http.StatusBadRequest,
+				errors.New("that folder is inside this one, so moving it there would detach both from the tree"))
+			return
+		}
+	}
+
 	f, err := s.st.UpdateFolder(r.PathValue("id"), func(f *store.Folder) {
 		if req.Name != nil {
 			f.Name = *req.Name
@@ -1154,3 +1173,27 @@ func lanRank(ip string) int {
 
 // PortString renders a port for a URL.
 func PortString(p int) string { return strconv.Itoa(p) }
+
+// folderContains reports whether candidate sits anywhere inside ancestor.
+//
+// Walks up from the candidate, counting steps: a cycle already present in the
+// data must not turn this into an infinite loop, and refusing the move is the
+// right answer in that case anyway.
+func (s *Server) folderContains(ancestor, candidate string) bool {
+	byID := map[string]*store.Folder{}
+	for _, f := range s.st.Folders() {
+		byID[f.ID] = f
+	}
+	cur := candidate
+	for hops := 0; cur != "" && hops < 64; hops++ {
+		if cur == ancestor {
+			return true
+		}
+		f, ok := byID[cur]
+		if !ok {
+			return false
+		}
+		cur = f.ParentID
+	}
+	return false
+}
