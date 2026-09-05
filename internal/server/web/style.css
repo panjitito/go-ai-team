@@ -789,6 +789,19 @@ table.md-table th { background: var(--bg-2); font-weight: 620; }
 .chat-empty { text-align: center; padding: 60px 20px; color: var(--fg-mute); }
 .chat-empty-title { font-size: 15px; color: var(--fg-dim); margin-bottom: 6px; }
 
+/* ---- MCP servers ---- */
+
+.mcp-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 16px 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
+}
+.mcp-table td { vertical-align: middle; padding: 5px 8px; }
+.mcp-cmd {
+  max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-mute); font-size: 11px;
+}
+.mcp-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
 /* ---- worktrees ---- */
 
 .wt-table td { vertical-align: middle; padding: 6px 8px; }

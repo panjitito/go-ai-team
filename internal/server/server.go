@@ -148,6 +148,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/doctor", s.doctor)
 	mux.HandleFunc("GET /api/fs/list", s.listDir)
 	mux.HandleFunc("GET /api/files/tree", s.fileTree)
+	mux.HandleFunc("GET /api/mcp", s.listMCP)
+	mux.HandleFunc("POST /api/mcp/copy", s.copyMCP)
 	mux.HandleFunc("GET /api/worktrees", s.listWorktrees)
 	mux.HandleFunc("POST /api/worktrees/remove", s.removeWorktree)
 	mux.HandleFunc("GET /api/files/find", s.findFiles)

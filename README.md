@@ -90,6 +90,7 @@ point, since the alternative charges per month for a few hundred of them.
 | **Ticket scoping** | A PM pass reads the real codebase and writes a brief onto the ticket before any code is written. |
 | **Prompt library** | Folders, personal flag, and `{{prompt:name}}` chaining so shared rules live in one place. |
 | **Skills library** | `SKILL.md` with triggers, exportable to any runtime that reads the format. |
+| **MCP servers, per account** | Every account's servers in one list, and a copy between them. Sharing your user layer does not cover these: they live in `.claude.json`, which also holds session history and per-project state, so it cannot be linked the way commands and skills are — and a newly signed-in account therefore has none of them, with nothing to say so. Values are never shown; the copy moves them file to file so a database password does not pass through the API or a command line. |
 | **Project memory** | What agents learned — decisions, pitfalls, conventions — surviving the session, read by every agent. |
 
 ### Automation

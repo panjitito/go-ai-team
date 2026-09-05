@@ -1292,6 +1292,7 @@ $('#skillsBtn').onclick = openSkills;
 $('#memoryBtn').onclick = openMemory;
 $('#autoBtn').onclick = openAutomation;
 $('#envBtn').onclick = openEnvironment;
+$('#mcpBtn').onclick = openMCP;
 $('#rolesBtn').onclick = openRoles;
 $('#guardBtn').onclick = openGuard;
 $('#addProjectBtn').onclick = addProject;

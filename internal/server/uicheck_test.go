@@ -713,6 +713,7 @@ new Promise(async resolve => {
 	}
 
 	panels := map[string]string{
+		"mcpBtn":      "MCP servers",
 		"promptsBtn":  "Prompt library",
 		"skillsBtn":   "Skills library",
 		"rolesBtn":    "Roles",
