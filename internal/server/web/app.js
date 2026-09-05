@@ -1490,6 +1490,9 @@ $('#addProjectBtn').onclick = addProject;
 $('#settingsBtn').onclick = openSettings;
 $('#doctorBtn').onclick = openDoctor;
 $('#menuBtn').onclick = toggleNav;
+// A keyboard shortcut nobody can see is a keyboard shortcut nobody uses, so the
+// button carries its own key next to it and teaches itself.
+$('#gotoBtn').onclick = openPalette;
 
 // Ctrl-B, because that is the shortcut every editor uses for this and muscle
 // memory is worth more than a novel one. Not while a modifier combination means

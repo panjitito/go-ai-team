@@ -1033,6 +1033,60 @@ table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
 }
 .mcp-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 
+/* ---- the go-to palette ----
+
+   Near the top rather than centred: the list grows downwards as you type, and a
+   box pinned to the middle of the screen jumps about while you are reading it. */
+
+.pal-host {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, .45);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+}
+.pal {
+  width: min(620px, 92vw);
+  background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.pal-input { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.pal-input input {
+  width: 100%; background: none; border: 0; outline: none;
+  font-size: 15px; color: var(--fg); padding: 0;
+}
+.pal-list { max-height: 52vh; overflow-y: auto; padding: 5px; }
+.pal-item {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--fg-dim);
+}
+.pal-item.active { background: var(--bg-3); color: var(--fg); }
+/* What kind of thing it is, in a fixed column, so the eye can skip the ones it
+   does not want without reading them. */
+.pal-kind {
+  flex: none; width: 52px; font: 10px var(--mono); color: var(--fg-mute);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.pal-title { flex: none; font-weight: 550; }
+.pal-note {
+  flex: 1; min-width: 0; font-size: 11.5px; color: var(--fg-mute);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;
+}
+.pal-empty { padding: 18px; text-align: center; color: var(--fg-mute); font-size: 13px; }
+.pal-foot {
+  padding: 6px 12px; border-top: 1px solid var(--line);
+  font: 10.5px var(--mono); color: var(--fg-mute);
+}
+/* The topbar button that opens it, wearing its own shortcut. */
+.btn.goto { display: inline-flex; align-items: center; gap: 7px; }
+.btn.goto kbd {
+  font: 10px var(--mono); color: var(--fg-mute);
+  border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 4px;
+}
+/* On a narrow screen the topbar already scrolls sideways, and a key nobody is
+   going to press there is not worth the width it costs. */
+@media (max-width: 780px) { .btn.goto kbd { display: none; } }
+
 /* ---- worktrees ---- */
 
 .wt-table td { vertical-align: middle; padding: 6px 8px; }
