@@ -1,0 +1,7 @@
+# Captured terminal output, stored verbatim.
+#
+# These fixtures are raw pty bytes — escape sequences and CRLF pairs are the
+# thing being tested. With autocrlf on, git rewrote the line endings on the way
+# in and the files that came back out of a clone were not the ones the parser
+# was written against.
+internal/session/testdata/*.bin -text
