@@ -152,7 +152,11 @@ function raise(title, body, sessionId) {
   try {
     // The tag keeps one notification per session: an agent that asks, is
     // answered and asks again replaces its own rather than stacking.
-    n = new Notification(title, { body, tag: 'goaiteam-' + sessionId, icon: notifyIcon() });
+    //
+    // No icon: Chrome's notification decoder does not take SVG, and the app's
+    // own icon is an inline SVG. Left out, the browser uses the page's, which
+    // is the same picture and is actually shown.
+    n = new Notification(title, { body, tag: 'goaiteam-' + sessionId });
   } catch {
     return;   // some platforms need a service worker; the chime still played
   }
@@ -163,14 +167,6 @@ function raise(title, body, sessionId) {
     if (s) openTerm(sessionId);
   };
   setTimeout(() => n.close(), 20000);
-}
-
-function notifyIcon() {
-  return 'data:image/svg+xml,' + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
-    "<rect width='32' height='32' rx='8' fill='#ff8a3d'/>" +
-    "<text x='16' y='23' font-size='19' font-family='sans-serif' font-weight='bold'" +
-    " text-anchor='middle' fill='#1a1005'>G</text></svg>");
 }
 
 // chime is two short notes, synthesised rather than shipped: no asset to load,
