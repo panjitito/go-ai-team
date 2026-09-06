@@ -48,6 +48,13 @@ import (
 // goes nowhere. They are pointed at a log file first: an app with no console
 // still needs somewhere to put "could not open a browser". Ctrl-C goes too,
 // which is why this is only called where the window is the way out.
+//
+// What it does not cost is the pseudo-consoles this app exists to run. That
+// looked like the obvious risk — every agent is a ConPTY created by this
+// process — so it was measured: a pty opened, a command run in it and its
+// output read back, before and after the call. Both work. A pseudoconsole is
+// created for a child, not attached to the parent, and detaching from ours has
+// nothing to do with it.
 
 var (
 	kernel32            = windows.NewLazySystemDLL("kernel32.dll")

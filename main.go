@@ -139,7 +139,6 @@ func main() {
 	}
 
 	localURL := fmt.Sprintf("http://localhost:%d", listenPort)
-	printBanner(listenPort, localURL, app.token, app.loopback, app.st.RootDir(), app.vault != nil)
 
 	// A native window is preferred and falls back rather than failing: a machine
 	// without the WebView2 runtime should still get its UI, just in a browser.
@@ -158,13 +157,28 @@ func main() {
 	// already writing to it is a race. Nothing has started yet at this point.
 	//
 	// Only in desktop mode, because the console is the only way to stop the app
-	// in the others — closing the window is what quits this one. And only on
-	// loopback: bound to the network the banner is showing an access token that
-	// exists nowhere else, and taking the window away would take the token with
-	// it. The token is deliberately not written to the log.
+	// in the others — this one has a window and a notification icon with Quit on
+	// it. And only on loopback: bound to the network the banner is showing an
+	// access token that exists nowhere else, and taking the window away would
+	// take the token with it. The token is deliberately not written to the log.
+	released := false
 	if mode == browser.ModeDesktop && app.loopback {
-		desktop.ReleaseOwnConsole(filepath.Join(app.st.RootDir(), "log", "app.log"))
+		released = desktop.ReleaseOwnConsole(filepath.Join(app.st.RootDir(), "log", "app.log"))
 	}
+
+	// After the console has gone, not before. Printed first, the banner went to a
+	// window that was about to be destroyed and nobody ever read it; printed here
+	// it lands in the log, which is where somebody looks when the app started and
+	// they cannot see it. When there is still a console it goes there, as always.
+	stopWith := "Ctrl-C to stop."
+	if released {
+		stopWith = "Close the window, or Quit from the notification area."
+	}
+	printBanner(banner{
+		Port: listenPort, URL: localURL, Token: app.token,
+		Loopback: app.loopback, Home: app.st.RootDir(), VaultOK: app.vault != nil,
+		StopWith: stopWith, Plain: released,
+	})
 
 	if mode != browser.ModeNone && mode != browser.ModeDesktop {
 		go func() {
@@ -457,29 +471,54 @@ func randomToken() string {
 	return hex.EncodeToString(b[:])
 }
 
-func printBanner(port int, localURL, token string, loopback bool, home string, vaultOK bool) {
-	line := strings.Repeat("─", 58)
-	fmt.Printf("\n\x1b[38;5;208m  Go AI Team\x1b[0m %s\n  %s\n", version, line)
-	fmt.Printf("  Desktop   %s\n", localURL)
+// banner is the startup summary and where it is going.
+type banner struct {
+	Port     int
+	URL      string
+	Token    string
+	Loopback bool
+	Home     string
+	VaultOK  bool
+	// StopWith is how to stop the app, which is not always Ctrl-C: with the
+	// console released there is no Ctrl-C to press, and saying so in a log
+	// somebody is reading precisely because they cannot find the app would be a
+	// poor joke.
+	StopWith string
+	// Plain drops the colour and the box drawing. The banner goes to a log file
+	// when there is no console left to print it to, and escape sequences and
+	// box-drawing characters in a file that Notepad and `type` will open are
+	// noise at best and mojibake at worst.
+	Plain bool
+}
 
-	if loopback {
+func printBanner(b banner) {
+	rule, orange, yellow, off := "─", "\x1b[38;5;208m", "\x1b[33m", "\x1b[0m"
+	if b.Plain {
+		rule, orange, yellow, off = "-", "", "", ""
+	}
+	line := strings.Repeat(rule, 58)
+
+	fmt.Printf("\n%s  Go AI Team%s %s\n  %s\n", orange, off, version, line)
+	fmt.Printf("  Desktop   %s\n", b.URL)
+
+	if b.Loopback {
 		if ips := server.LocalIPs(); len(ips) > 0 {
 			fmt.Printf("  Phone     bound to loopback only.\n")
 			fmt.Printf("            restart with --host 0.0.0.0 to reach it at\n")
-			fmt.Printf("            http://%s:%d\n", ips[0], port)
+			fmt.Printf("            http://%s:%d\n", ips[0], b.Port)
 		}
 	} else {
 		fmt.Printf("\n  Reachable on your network. The API needs this token:\n")
 		for _, ip := range server.LocalIPs() {
-			fmt.Printf("  Phone     http://%s:%d/?token=%s\n", ip, port, token)
+			fmt.Printf("  Phone     http://%s:%d/?token=%s\n", ip, b.Port, b.Token)
 		}
-		fmt.Printf("\n  \x1b[33mAnyone on this network with that link can drive your\n")
-		fmt.Printf("  terminals. The token is new on every start.\x1b[0m\n")
+		fmt.Printf("\n  %sAnyone on this network with that link can drive your\n", yellow)
+		fmt.Printf("  terminals. The token is new on every start.%s\n", off)
 	}
 
-	fmt.Printf("\n  State     %s\n", home)
-	if !vaultOK {
-		fmt.Printf("  \x1b[33mVault     disabled: no encryption provider on this machine\x1b[0m\n")
+	fmt.Printf("\n  State     %s\n", b.Home)
+	if !b.VaultOK {
+		fmt.Printf("  %sVault     disabled: no encryption provider on this machine%s\n", yellow, off)
 	}
-	fmt.Printf("  %s\n  Ctrl-C to stop.\n\n", line)
+	fmt.Printf("  %s\n  %s\n\n", line, b.StopWith)
 }
