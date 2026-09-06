@@ -149,6 +149,23 @@ func main() {
 		}
 	}
 
+	// A desktop app does not leave a console box sitting behind its window, so
+	// the console is given back — see internal/desktop/console_windows.go for
+	// why hiding it stopped working on Windows 11.
+	//
+	// Here rather than further down, next to the window: after this, output goes
+	// to a file, and reassigning os.Stdout underneath a goroutine that is
+	// already writing to it is a race. Nothing has started yet at this point.
+	//
+	// Only in desktop mode, because the console is the only way to stop the app
+	// in the others — closing the window is what quits this one. And only on
+	// loopback: bound to the network the banner is showing an access token that
+	// exists nowhere else, and taking the window away would take the token with
+	// it. The token is deliberately not written to the log.
+	if mode == browser.ModeDesktop && app.loopback {
+		desktop.ReleaseOwnConsole(filepath.Join(app.st.RootDir(), "log", "app.log"))
+	}
+
 	if mode != browser.ModeNone && mode != browser.ModeDesktop {
 		go func() {
 			// A moment for the listener to be serving, so the first request is
@@ -192,10 +209,6 @@ func main() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	if mode == browser.ModeDesktop {
-		// A desktop app does not leave a console box sitting behind its window.
-		// Only ours is hidden — a terminal we were launched from keeps its own.
-		desktop.HideOwnConsole()
-
 		// The window owns the main thread from here: Windows requires the
 		// message loop to run on the thread that created the window, and main
 		// is the only thread we can guarantee that for. Ctrl-C still works —

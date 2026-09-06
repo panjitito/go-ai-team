@@ -11,9 +11,9 @@ func Available() (bool, string) {
 
 func Run(o Opts) error { return ErrUnsupported }
 
-// HideOwnConsole is a Windows problem: elsewhere a program launched from a file
-// manager does not get a console window to hide.
-func HideOwnConsole() bool { return false }
+// ReleaseOwnConsole is a Windows problem: elsewhere a program launched from a
+// file manager does not get a console window in the first place.
+func ReleaseOwnConsole(logPath string) bool { return false }
 
 // Attention and StopAttention flash the taskbar button on Windows. There is no
 // portable equivalent, and the page's own title already says how many agents
