@@ -292,3 +292,104 @@ func TestFlattenFrameKeepsWordsApart(t *testing.T) {
 		t.Errorf("flattenFrame(%q) = %q", raw, got)
 	}
 }
+
+// The folder-trust question, which is the first thing every new project meets.
+//
+// Captured from a real agent started in a directory the CLI had not seen. It is
+// drawn with no numbers at all — just an arrow and two lines — so the numbered
+// parser rejected it at the first test and the app reported the agent as
+// "waiting" with nothing to click. It sat there for as long as anybody left it.
+func TestParseAskTrustFolder(t *testing.T) {
+	raw := fixture(t, "ask_trust.bin")
+	ask, ok := ParseAsk(raw)
+	if !ok {
+		t.Fatal("the folder-trust question was not recognised")
+	}
+	if len(ask.Options) != 2 {
+		t.Fatalf("got %d options, want 2: %+v", len(ask.Options), ask.Options)
+	}
+	if ask.Options[0].Label != "No, exit" {
+		t.Errorf("option 1 = %q", ask.Options[0].Label)
+	}
+	if ask.Options[1].Label != "Yes, I trust this folder" {
+		t.Errorf("option 2 = %q", ask.Options[1].Label)
+	}
+	// The CLI's own cursor is on the first row, and the panel has to say so:
+	// the dangerous one is selected by default here.
+	if !ask.Options[0].Selected || ask.Options[1].Selected {
+		t.Errorf("selection = %+v, want the first", ask.Options)
+	}
+	// Numbered from one even though nothing on screen is numbered, because
+	// Answer counts rows to move the cursor by.
+	if ask.Options[0].Number != 1 || ask.Options[1].Number != 2 {
+		t.Errorf("numbers = %d, %d", ask.Options[0].Number, ask.Options[1].Number)
+	}
+	if !strings.Contains(strings.ToLower(ask.Question), "trust") {
+		t.Errorf("question = %q", ask.Question)
+	}
+	if !ask.Cancel {
+		t.Error("the box says Esc to cancel and this did not notice")
+	}
+}
+
+// The composer draws a ❯ too. Mistaking a half-typed message for a question
+// would put buttons on screen over an agent that is waiting for the person to
+// finish their sentence.
+func TestParseArrowIgnoresTheComposer(t *testing.T) {
+	for _, name := range []string{"empty prompt", "typed prompt", "no footer"} {
+		var s string
+		switch name {
+		case "empty prompt":
+			s = "some output\n\n❯ \n  \n"
+		case "typed prompt":
+			// What the composer looks like with two lines in it, borders and all.
+			s = "│ ❯ write the migration │\n│   and then run it      │\n" +
+				"  Enter to confirm\n"
+		case "no footer":
+			// The shape of a menu, without the thing that makes it one.
+			s = "Pick one:\n❯ alpha\n  beta\n\nsomething else entirely\n"
+		}
+		if ask, ok := ParseAsk(s); ok {
+			t.Errorf("%s: read a question that is not there: %+v", name, ask)
+		}
+	}
+}
+
+// Answering moves the arrow, and the box has to still be a box afterwards.
+//
+// The parser looked only downwards at first, on the reasoning that the arrow
+// starts on the first option. It does, and then Answer presses Down: the arrow
+// landed on the last row, no siblings were found beneath it, and the box
+// stopped being recognised half way through being answered. Every time, on the
+// only prompt it was written for.
+func TestParseArrowFollowsTheMovingCursor(t *testing.T) {
+	const box = " Is this a project you trust?\n" +
+		" ❯ No, exit\n" +
+		"   Yes, I trust this folder\n" +
+		" Enter to confirm · Esc to cancel\n"
+	// The same screen after one press of Down.
+	const moved = " Is this a project you trust?\n" +
+		"   No, exit\n" +
+		" ❯ Yes, I trust this folder\n" +
+		" Enter to confirm · Esc to cancel\n"
+
+	for _, c := range []struct {
+		name string
+		s    string
+		want int
+	}{{"cursor on the first", box, 1}, {"cursor on the last", moved, 2}} {
+		ask, ok := ParseAsk(c.s)
+		if !ok {
+			t.Fatalf("%s: the box was not recognised", c.name)
+		}
+		if len(ask.Options) != 2 {
+			t.Fatalf("%s: %d options, want 2: %+v", c.name, len(ask.Options), ask.Options)
+		}
+		if ask.Options[0].Label != "No, exit" || ask.Options[1].Label != "Yes, I trust this folder" {
+			t.Errorf("%s: labels = %q, %q", c.name, ask.Options[0].Label, ask.Options[1].Label)
+		}
+		if got := selectedNumber(ask); got != c.want {
+			t.Errorf("%s: selected %d, want %d", c.name, got, c.want)
+		}
+	}
+}

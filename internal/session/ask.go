@@ -104,7 +104,14 @@ var (
 // anything happened.
 func ParseAsk(tail string) (Ask, bool) {
 	s := screenText(tail)
+	if a, ok := parseNumbered(s); ok {
+		return a, true
+	}
+	// Not every box numbers itself. See parseArrow.
+	return parseArrow(s)
+}
 
+func parseNumbered(s string) (Ask, bool) {
 	cur := strings.LastIndex(s, "❯")
 	if cur < 0 || !cursorOnAnOption(s, cur) {
 		return Ask{}, false
@@ -130,6 +137,170 @@ func ParseAsk(tail string) (Ask, bool) {
 		Steps:    AskSteps(s[max(0, from-300):from]),
 		Cancel:   strings.Contains(strings.ToLower(s[from:]), "esc to cancel"),
 	}, true
+}
+
+// parseArrow reads a box whose options are not numbered.
+//
+// Found by running a real agent in a directory the CLI had not seen before. The
+// folder-trust question — the first thing every new project meets — is drawn as
+// a plain arrow menu:
+//
+//	❯ No, exit
+//	  Yes, I trust this folder
+//
+//	Enter to confirm · Esc to cancel
+//
+// No digits anywhere, so the numbered parser rejected it at the first test and
+// the app reported the agent as merely "waiting". It sat there for as long as
+// anybody left it, on the one prompt that stops a new project dead, with
+// nothing on screen to click. The README had claimed this case for months.
+//
+// The shape is what identifies it: a ❯ with text after it, one or more lines
+// directly under it whose text begins at the same column, and the picker's own
+// footer below. All three are required, because the composer draws a ❯ too and
+// this must never mistake a half-typed message for a question.
+func parseArrow(s string) (Ask, bool) {
+	lines := strings.Split(s, "\n")
+
+	row := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "❯") {
+			row = i
+			break
+		}
+	}
+	if row < 0 {
+		return Ask{}, false
+	}
+
+	// In columns, not bytes. ❯ is three bytes wide and one column wide, so the
+	// line under it lines up on screen and does not line up in the string —
+	// which is exactly the mistake that made the first version of this reject
+	// its own fixture.
+	arrow := []rune(lines[row])
+	at := runeIndex(arrow, '❯')
+	textAt := at + 1
+	for textAt < len(arrow) && (arrow[textAt] == ' ' || arrow[textAt] == '\t') {
+		textAt++
+	}
+	first := strings.TrimSpace(string(arrow[min(textAt, len(arrow)):]))
+	if first == "" || strings.ContainsRune(lines[row], '│') {
+		// A bare cursor is the composer waiting for a message, and a cursor
+		// inside a box border is the composer with something typed into it.
+		return Ask{}, false
+	}
+
+	// Both directions, and this is not a detail.
+	//
+	// The first version of this looked only downwards, on the reasoning that the
+	// arrow starts on the first option. It does — and then answering moves it.
+	// One press of Down put the arrow on the last row, the search found no
+	// siblings beneath it, and the box stopped being recognised mid-answer:
+	// "the question went away while it was being answered", every time, on the
+	// only prompt this was written for.
+	//
+	// Walking up is safe for the same reason walking down is: a sibling has to
+	// be blank all the way to the option column. The question above is indented
+	// differently and fails that test.
+	sibling := func(i int) (string, bool) {
+		if i < 0 || i >= len(lines) {
+			return "", false
+		}
+		l := []rune(lines[i])
+		if len(l) <= textAt || strings.TrimSpace(string(l[:textAt])) != "" {
+			return "", false
+		}
+		text := strings.TrimSpace(string(l[textAt:]))
+		return text, text != ""
+	}
+
+	var above []string
+	firstRow := row
+	for i := row - 1; ; i-- {
+		text, ok := sibling(i)
+		if !ok {
+			break
+		}
+		above = append([]string{text}, above...)
+		firstRow = i
+	}
+
+	labels := append(append([]string{}, above...), first)
+	selected := len(above)
+	last := row
+	for i := row + 1; ; i++ {
+		text, ok := sibling(i)
+		if !ok {
+			break
+		}
+		labels = append(labels, text)
+		last = i
+	}
+	if len(labels) < 2 {
+		return Ask{}, false
+	}
+
+	// The footer is the third guard, and the one that makes this safe. A picker
+	// says how to answer it; prose that happens to be indented does not.
+	foot := ""
+	for i := last + 1; i < len(lines) && i <= last+4; i++ {
+		foot += " " + strings.ToLower(lines[i])
+	}
+	if !strings.Contains(foot, "enter to confirm") && !strings.Contains(foot, "enter to select") {
+		return Ask{}, false
+	}
+
+	opts := make([]AskOption, len(labels))
+	for i, l := range labels {
+		// Numbered from one even though the box shows no numbers. Nothing
+		// downstream cares where the number came from — answering moves the
+		// cursor with arrow keys and checks the screen either way — and it lets
+		// the panel, the API and Answer stay as they are.
+		opts[i] = AskOption{Number: i + 1, Label: cleanFurniture(l), Selected: i == selected}
+	}
+
+	from := 0
+	for i := 0; i < firstRow; i++ {
+		from += len(lines[i]) + 1
+	}
+	return Ask{
+		Question: arrowQuestion(lines, firstRow),
+		Options:  opts,
+		Steps:    AskSteps(s[max(0, from-300):from]),
+		Cancel:   strings.Contains(strings.ToLower(foot), "esc to cancel"),
+	}, true
+}
+
+// arrowQuestion takes the question out of the lines above an unnumbered box.
+//
+// Not the last line that says something, which is what the numbered boxes use.
+// This kind states itself over several rows and then qualifies itself over
+// several more — the trust prompt asks in its first line and spends three
+// explaining what agreeing to means — and stopping at the nearest non-empty row
+// yields "Security guide", a link, as the question.
+//
+// So it anchors on the question mark and keeps everything from there down. What
+// is above that is the frame: a rule, "Accessing workspace:", the path.
+func arrowQuestion(lines []string, row int) string {
+	start := row - 1
+	for i := row - 1; i >= 0 && i >= row-8; i-- {
+		if strings.Contains(lines[i], "?") {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+	q := strings.Join(strings.Fields(strings.Join(lines[start:row], " ")), " ")
+	q = strings.TrimSpace(askFooter.ReplaceAllString(q, ""))
+	// Long, because this one genuinely is. Bounded so a runaway frame cannot
+	// turn the notification body into a screenful.
+	const most = 400
+	if r := []rune(q); len(r) > most {
+		q = string(r[:most-1]) + "…"
+	}
+	return q
 }
 
 // repairQuestion fills in a character a partial repaint swallowed.
@@ -633,4 +804,15 @@ func (m *Manager) Interrupt(id string) error {
 		return fmt.Errorf("that session is not running")
 	}
 	return m.SendKeys(id, "\x1b")
+}
+
+// runeIndex is strings.IndexRune in column terms: the answer counts characters,
+// not bytes, because everything this file lines up is lined up on a screen.
+func runeIndex(rs []rune, want rune) int {
+	for i, r := range rs {
+		if r == want {
+			return i
+		}
+	}
+	return -1
 }

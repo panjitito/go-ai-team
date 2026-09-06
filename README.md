@@ -88,6 +88,7 @@ point, since the alternative charges per month for a few hundred of them.
 | **Dev terminals** | Saved per-project commands with live output, reachable from your phone. |
 | **SSH** | Saved hosts, one-click shell using your own ssh client, tunnels for private databases. |
 | **Restore on launch** | Reopens the agents and commands that were running when you quit. |
+| **Quit, from inside** | Ctrl-C in a console was the only way out, and the console is given back at startup now so that no black box sits behind the window. Quit lives in Settings and in Ctrl-K, asks first and says how many sessions it is about to end. It is also what lets every launch mode drop its console, not just the desktop window — a browser tab has no window to close and no icon in the notification area. `--browser none` keeps its terminal, because somebody running this as a bare server has nothing else to stop it with. |
 | **Closing the window does not stop the work** | The X drops the app to the notification area and the agents carry on, because the window is a view onto a server that is perfectly happy without it. Click the icon to come back; Quit is on its right-click menu. A hidden window has no taskbar button to flash, so while it is down there an agent's question raises a balloon from the icon and the icon's tooltip says how many are waiting — that works whether or not the browser notifications were ever switched on. The first time it hides it says so, once, because somebody who closes a window expects it to be closed. |
 
 ### Work intake
@@ -463,6 +464,12 @@ that review had not caught. Each keeps its own evidence:
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
+- **The folder-trust box is not numbered, and nothing else is like it.** Every
+  other question Claude Code asks is a numbered list, so the parser required a
+  digit after the cursor. The trust prompt — the first thing every new project
+  meets — is a bare arrow menu, so an agent started in an unseen directory sat
+  on it indefinitely, reported as merely "waiting", with nothing to click. Found
+  by running a real agent, which is the only way it could have been found.
 - **A transcript is read incrementally, and only its tail.** A real one here was
   257MB. Parsing it whole cost 762ms per poll and 1.24s per 1.5s refresh; now it
   is 0ms and ~100ms.
@@ -473,9 +480,10 @@ that review had not caught. Each keeps its own evidence:
   the spinner ran on the board and in the project tree until an unrelated click
   forced a reload. An agent that had finished ten minutes ago still read as busy.
 
-Two scripted loops in `scratchpad/` exercise the running server: 102 endpoint
-checks including the failure cases, and an end-to-end automation run that fires
-a real signed webhook and asserts the interpolated prompt reached the terminal.
+`scratchpad/live_check.py` is the one that needs a real account and spends
+quota: it starts an agent, answers the question it stops on, and then asks the
+activity log and the transcript search whether they saw any of it. Run
+deliberately, not in a loop — it is what found the trust-prompt bug above.
 
 ## Not built
 
