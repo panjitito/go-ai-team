@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -156,13 +157,18 @@ func main() {
 	// to a file, and reassigning os.Stdout underneath a goroutine that is
 	// already writing to it is a race. Nothing has started yet at this point.
 	//
-	// Only in desktop mode, because the console is the only way to stop the app
-	// in the others — this one has a window and a notification icon with Quit on
-	// it. And only on loopback: bound to the network the banner is showing an
+	// Two conditions, and both are about not stranding anybody.
+	//
+	// There has to be a UI, because it now carries the Quit that Ctrl-C used to
+	// be — `--browser none` is somebody deliberately running this as a bare
+	// server from a terminal, and taking their terminal away would leave them
+	// with no way to stop it at all.
+	//
+	// And it has to be loopback. Bound to the network the banner is showing an
 	// access token that exists nowhere else, and taking the window away would
 	// take the token with it. The token is deliberately not written to the log.
 	released := false
-	if mode == browser.ModeDesktop && app.loopback {
+	if mode != browser.ModeNone && app.loopback {
 		released = desktop.ReleaseOwnConsole(filepath.Join(app.st.RootDir(), "log", "app.log"))
 	}
 
@@ -171,8 +177,11 @@ func main() {
 	// it lands in the log, which is where somebody looks when the app started and
 	// they cannot see it. When there is still a console it goes there, as always.
 	stopWith := "Ctrl-C to stop."
-	if released {
+	switch {
+	case released && mode == browser.ModeDesktop:
 		stopWith = "Close the window, or Quit from the notification area."
+	case released:
+		stopWith = "Quit from Settings in the app, or stop the process."
 	}
 	printBanner(banner{
 		Port: listenPort, URL: localURL, Token: app.token,
@@ -219,8 +228,23 @@ func main() {
 		fmt.Println("bye.")
 	}
 
+	// One way out, whoever asks for it.
+	//
+	// Ctrl-C was the only one until the console started being given back, and a
+	// console that is not there cannot deliver a Ctrl-C. The window's close
+	// button, Quit on the notification icon and Quit in the page all arrive
+	// here, and they arrive once: two clicks must not start two shutdowns.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+	stop := make(chan struct{})
+	var stopOnce sync.Once
+	askStop := func() { stopOnce.Do(func() { close(stop) }) }
+	go func() {
+		<-sig
+		askStop()
+	}()
+	app.srv.OnQuit(askStop)
 
 	if mode == browser.ModeDesktop {
 		// The window owns the main thread from here: Windows requires the
@@ -228,20 +252,20 @@ func main() {
 		// is the only thread we can guarantee that for. Ctrl-C still works —
 		// closing the window from the signal handler ends the loop, and control
 		// returns here either way.
-		if err := runDesktop(app, localURL, sig); err != nil {
+		if err := runDesktop(app, localURL, stop); err != nil {
 			log.Printf("could not open the app window (%v); visit %s", err, localURL)
-			<-sig
+			<-stop
 		}
 		shutdown("shutting down")
 		return
 	}
 
-	<-sig
+	<-stop
 	shutdown("shutting down")
 }
 
 // runDesktop shows the app window and returns when it closes.
-func runDesktop(app *app, url string, sig <-chan os.Signal) error {
+func runDesktop(app *app, url string, stop <-chan struct{}) error {
 	state := app.st.RootDir()
 	desktop.EnsureIcon(state)
 
@@ -264,20 +288,21 @@ func runDesktop(app *app, url string, sig <-chan os.Signal) error {
 
 	closer := make(chan func(), 1)
 	go func() {
-		// Wait for the window to exist before there is anything to close. A
-		// Ctrl-C that arrives during startup is not lost: sig is buffered, so it
-		// is still waiting to be read on the next line.
-		var stop func()
+		// Wait for the window to exist before there is anything to close. A stop
+		// asked for during startup is not lost: the channel stays closed, so it
+		// is still readable on the next line.
+		var closeWindow func()
 		select {
-		case stop = <-closer:
+		case closeWindow = <-closer:
 		case <-done:
 			return
 		}
-		// Ctrl-C in the terminal should take the window down with it, rather
-		// than leave it on screen after the process has gone.
+		// A stop from anywhere else — Ctrl-C where there is still a console, or
+		// Quit in the page — has to take the window down with it, rather than
+		// leave it on screen after the process has gone.
 		select {
-		case <-sig:
-			stop()
+		case <-stop:
+			closeWindow()
 		case <-done:
 		}
 	}()

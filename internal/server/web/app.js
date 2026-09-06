@@ -1346,6 +1346,7 @@ async function openSettings() {
       'The cascade, in order: agent override → project pin → nearest folder that pins an account → global default → ~/.claude.'));
 
   modal('Settings', body, [
+    ['Quit Go AI Team', 'btn danger', confirmQuit],
     ['Cancel', 'btn', closeModal],
     ['Save', 'btn primary', async () => {
       const payload = {
@@ -1358,6 +1359,45 @@ async function openSettings() {
       await tryApi('/settings', { method: 'PATCH', body: payload });
       await loadAll();
       toast('Settings saved', 'ok');
+    }],
+  ]);
+}
+
+/* Stopping the app from inside it.
+ *
+ * Ctrl-C in the console used to be the way out, and the console is given back
+ * on startup now so that no black box sits behind the window. Something had to
+ * replace it, and in a browser tab — where there is no window to close and no
+ * icon in the notification area — this is the only thing there is.
+ *
+ * It asks first, and says what it costs. Quitting is not closing a window: it
+ * ends every running agent, and an agent halfway through a turn does not come
+ * back where it left off.
+ */
+async function confirmQuit() {
+  const live = S.sessions.filter(s => s.status !== 'exited' && s.status !== 'error');
+  const body = el('div', {},
+    el('p', { text: live.length
+      ? `This stops Go AI Team and ends ${live.length} running ` +
+        (live.length === 1 ? 'session' : 'sessions') + '.'
+      : 'This stops Go AI Team. Nothing is running right now.' }),
+    el('div', { class: 'hint', text: 'What was running is remembered, and offered back the next time the app starts.' }));
+
+  modal('Quit', body, [
+    ['Cancel', 'btn', closeModal],
+    ['Quit', 'btn danger', async () => {
+      closeModal();
+      toast('Stopping…', 'ok');
+      try {
+        await api('/quit', { method: 'POST', body: {} });
+      } catch {
+        // The reply can lose the race with the listener closing, and that means
+        // it worked. Only a refusal is worth reporting, and there is no way to
+        // tell one from the other here — so say the honest thing.
+      }
+      document.body.innerHTML =
+        '<div class="empty" style="height:100vh"><h3>Go AI Team has stopped</h3>' +
+        '<p>You can close this window.</p></div>';
     }],
   ]);
 }
@@ -1417,6 +1457,7 @@ function connectEvents() {
       S.sessions = m.sessions || [];
       S.accounts = m.accounts || S.accounts;
       if (S.view === 'grid') renderMain();
+      refreshLiveViewSoon();
       renderTopbar(); renderStatus(); renderSidebar();
       updateWaitingCount();
       alertScan();
@@ -1473,6 +1514,7 @@ function connectEvents() {
 
     if (S.view === 'grid') renderMain();
     if (S.view === 'activity') refreshActivitySoon();
+    refreshLiveViewSoon();
     if (S.view === 'term') updateTermTokens();
     renderStatus(); renderTopbar();
     // The tree was not in this list, so its live count only changed when

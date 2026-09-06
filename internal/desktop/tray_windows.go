@@ -266,8 +266,15 @@ func hideToTray() {
 
 	if !tray.explained {
 		tray.explained = true
-		balloon("Still running, and so are the agents. Click here to come back, " +
-			"or right-click for Quit.")
+		// Where the icon actually is, not where you would expect it.
+		//
+		// Windows 11 puts a new notification icon behind the overflow chevron by
+		// default and there is deliberately no way to ask for it to be promoted.
+		// So the one moment somebody is looking for the app is the moment to say
+		// where it went, and how to stop having to look.
+		balloon("Still running, and so are the agents. The icon is under the ^ " +
+			"in the taskbar — drag it out to keep it visible. Click it to come " +
+			"back, or right-click for Quit.")
 	}
 }
 

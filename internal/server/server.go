@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uniair/go-ai-team/internal/accounts"
@@ -62,6 +63,12 @@ type Server struct {
 	// log remembers what happened, so the morning after can be read rather than
 	// guessed at from where everything happens to be standing.
 	log *journal
+
+	// onQuit is how the UI asks the app to stop. main owns the shutdown; this
+	// is only the doorbell, and it exists because releasing the console took
+	// Ctrl-C away with it.
+	quitMu sync.Mutex
+	onQuit func()
 
 	// token guards the API when the server is reachable beyond loopback. It is
 	// generated per run and printed once, so binding to the LAN for phone access
@@ -154,6 +161,7 @@ func (s *Server) Handler() http.Handler {
 
 	// --- settings, misc ---
 	mux.HandleFunc("GET /api/activity", s.listActivity)
+	mux.HandleFunc("POST /api/quit", s.quit)
 	mux.HandleFunc("GET /api/search", s.search)
 
 	mux.HandleFunc("GET /api/settings", s.getSettings)

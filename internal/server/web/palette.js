@@ -116,7 +116,7 @@ function paletteItems() {
     ['Memory', openMemory], ['Roles', openRoles], ['Automation', openAutomation],
     ['Environment', openEnvironment], ['MCP servers', openMCP],
     ['Process guard', openGuard], ['Doctor', openDoctor], ['Settings', openSettings],
-    ['Keyboard shortcuts', openKeys],
+    ['Keyboard shortcuts', openKeys], ['Quit Go AI Team', confirmQuit],
   ];
   for (const [name, fn] of panels) {
     items.push({ kind: 'panel', urgency: 5, title: name, note: 'panel', hay: name, run: fn });

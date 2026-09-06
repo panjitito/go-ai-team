@@ -1,9 +1,11 @@
 /* Go AI Team — the views beyond the agent grid.
  *
  * Each view is a function that renders into the main pane. They share the state
- * and helpers from app.js rather than owning any of their own, so a change that
- * arrives over the event socket repaints whichever view happens to be open
- * without each one needing its own subscription.
+ * and helpers from app.js rather than owning any of their own.
+ *
+ * Which of them repaint when an event arrives is deliberate and narrow — see
+ * LIVE_VIEWS near the bottom. Redrawing a view somebody is dragging a card
+ * across, or one holding a live terminal, does more harm than a stale number.
  */
 'use strict';
 
@@ -737,6 +739,34 @@ function tile(label, value, sub) {
     el('div', { class: 'tile-v', text: value }),
     el('div', { class: 'tile-l', text: label }),
     sub ? el('div', { class: 'tile-s', text: sub }) : null);
+}
+
+// ------------------------------------------------------- keeping a view honest
+
+/* Which views repaint when something happens, and why most of them must not.
+
+   The comment at the top of this file used to claim that an event repaints
+   whichever view is open. It did not: only the agent grid was ever redrawn, so
+   Statistics sat showing a token count that had stopped moving — numbers that
+   look live and are not, which is worse than numbers that are obviously stale.
+
+   Most of the others genuinely must be left alone. Board is drag and drop and
+   would drop the card out from under the cursor; Split and Terminals hold live
+   xterm panes that a repaint disposes; Files and Review are things somebody is
+   reading and scrolled. Only where the whole content is a number that moves on
+   its own is redrawing it an improvement.
+
+   Debounced, because a busy agent emits a token event every few seconds and
+   each repaint of Statistics is a fetch. */
+const LIVE_VIEWS = { stats: true };
+let liveViewTimer = null;
+
+function refreshLiveViewSoon() {
+  if (!LIVE_VIEWS[S.view] || liveViewTimer) return;
+  liveViewTimer = setTimeout(() => {
+    liveViewTimer = null;
+    if (LIVE_VIEWS[S.view]) renderMain();
+  }, 2500);
 }
 
 // ---------------------------------------------------------------- shared header
