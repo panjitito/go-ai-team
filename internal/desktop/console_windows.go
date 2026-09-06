@@ -113,7 +113,7 @@ func redirectOutput(logPath string) {
 	// told otherwise, and a log somebody opens with `type` should not arrive as
 	// mojibake.
 	fmt.Fprintf(f, "\n---- %s ----\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(f, "console released; the window is gone. Close the app window to stop.\n")
+	fmt.Fprintf(f, "console released; everything the app prints lands here from now on.\n")
 
 	// Both halves matter. SetStdHandle is what a child process inherits; the
 	// package variables are what this process's own fmt and log calls use, and

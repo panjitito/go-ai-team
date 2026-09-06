@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -64,6 +65,20 @@ func Run(o Opts) error {
 	setLive(uintptr(hwnd))
 	defer setLive(0)
 
+	// The notification area, and with it a close button that hides rather than
+	// ends every agent. Only when the icon is actually there: swallowing WM_CLOSE
+	// with nothing to click would make the app impossible to close.
+	//
+	// Logged either way. With the console released the log is the only place
+	// this can be seen, and "why did closing the window quit?" is exactly the
+	// question it answers.
+	if installTray(hwnd, w.Terminate) {
+		log.Printf("notification icon added; closing the window hides it and the agents keep running")
+	} else {
+		log.Printf("no notification icon: closing the window quits, as it did before")
+	}
+	defer removeTray()
+
 	// Show the window a second time, deliberately.
 	//
 	// Windows ignores the argument to the *first* ShowWindow call in a process
@@ -93,6 +108,12 @@ func Run(o Opts) error {
 			case <-stop:
 				return
 			case <-t.C:
+				// Only while it is on screen. A window sitting in the tray is
+				// hidden, and its placement then reports "not maximized" — so
+				// sampling one would quietly lose the fact that it was.
+				if !windowIsVisible(hwnd) {
+					continue
+				}
 				if b, ok := bounds(hwnd); ok {
 					last = b
 				}

@@ -15,8 +15,10 @@ func Run(o Opts) error { return ErrUnsupported }
 // file manager does not get a console window in the first place.
 func ReleaseOwnConsole(logPath string) bool { return false }
 
-// Attention and StopAttention flash the taskbar button on Windows. There is no
+// Attention and StopAttention flash the taskbar button on Windows, and
+// SetWaiting puts the same count on the notification-area icon. There is no
 // portable equivalent, and the page's own title already says how many agents
 // are waiting, so elsewhere these do nothing rather than approximate it badly.
-func Attention()     {}
-func StopAttention() {}
+func Attention()       {}
+func StopAttention()   {}
+func SetWaiting(_ int) {}

@@ -310,9 +310,17 @@ func watchForQuestions(sm *session.Manager, done <-chan struct{}) {
 				if !waiting[e.SessionID] {
 					waiting[e.SessionID] = true
 					desktop.Attention()
+					// The taskbar flash lands nowhere while the window is in
+					// the notification area, so the icon carries the count and
+					// raises a balloon of its own.
+					desktop.SetWaiting(len(waiting))
 				}
 			case "session.answered", "session.exited", "session.removed":
+				if _, was := waiting[e.SessionID]; !was {
+					continue
+				}
 				delete(waiting, e.SessionID)
+				desktop.SetWaiting(len(waiting))
 				if len(waiting) == 0 {
 					desktop.StopAttention()
 				}

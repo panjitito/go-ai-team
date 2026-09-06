@@ -88,6 +88,7 @@ point, since the alternative charges per month for a few hundred of them.
 | **Dev terminals** | Saved per-project commands with live output, reachable from your phone. |
 | **SSH** | Saved hosts, one-click shell using your own ssh client, tunnels for private databases. |
 | **Restore on launch** | Reopens the agents and commands that were running when you quit. |
+| **Closing the window does not stop the work** | The X drops the app to the notification area and the agents carry on, because the window is a view onto a server that is perfectly happy without it. Click the icon to come back; Quit is on its right-click menu. A hidden window has no taskbar button to flash, so while it is down there an agent's question raises a balloon from the icon and the icon's tooltip says how many are waiting — that works whether or not the browser notifications were ever switched on. The first time it hides it says so, once, because somebody who closes a window expects it to be closed. |
 
 ### Work intake
 | | |
@@ -450,6 +451,13 @@ that review had not caught. Each keeps its own evidence:
 - **A window must be shown twice on Windows.** The first ShowWindow call in a
   process is overridden by whatever the launcher asked for, so a shortcut set to
   "Minimized" produced an app that ran, listened, and never appeared.
+- **Hiding the console window stopped working, silently.** `ShowWindow(SW_HIDE)`
+  on `GetConsoleWindow()` is the classic move and it is a no-op on Windows 11:
+  with Windows Terminal as the host — what "Let Windows decide" resolves to —
+  the box on screen belongs to WindowsTerminal.exe and the handle you are given
+  was never visible. Measured by listing every process with a visible window
+  before and after. `FreeConsole` is what actually removes it, so output is
+  pointed at a log file and the console is given back rather than hidden.
 - **A session's id is not fixed for the life of the process.** `--resume` opens a
   picker, and choosing a conversation switches the CLI to that conversation's id.
   Reading the metafile once left the app pointing at a transcript that had never
