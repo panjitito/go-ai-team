@@ -77,14 +77,16 @@ func TestCleanEnv_StripsEveryProvidersAccountVar(t *testing.T) {
 		"CODEX_HOME=/b",
 		"GROK_HOME=/c",
 		"CURSOR_CONFIG_DIR=/d",
+		// Gemini binds with two, and the second one decides whether the token
+		// goes into the account's directory or into the machine's one keychain
+		// slot. Inheriting it is as wrong as inheriting the first.
+		"GEMINI_CLI_HOME=/e",
+		"GEMINI_FORCE_FILE_STORAGE=true",
 		"KEEP_ME=1",
 	}
-	for _, p := range []store.Provider{
-		store.ProviderClaude, store.ProviderCodex,
-		store.ProviderGrok, store.ProviderCursor,
-	} {
+	for _, p := range store.Providers {
 		got := envMap(cleanEnv(env, p))
-		for _, k := range []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME", "GROK_HOME", "CURSOR_CONFIG_DIR"} {
+		for _, k := range store.AccountVars() {
 			if v, ok := got[k]; ok {
 				t.Errorf("spawning %s: %s leaked (=%q)", p, k, v)
 			}

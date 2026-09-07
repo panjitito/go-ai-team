@@ -650,15 +650,29 @@ a loop. It found the trust-prompt bug above.
 Cloud agents (which need a cloud provider), a public feedback portal for
 clients, Figma capture, and a remote-fleet relay. The non-Claude providers are
 half done: the account model is provider-shaped and the env vars are wired, but
-only Claude is exercised. Mongo connections are saved and tunnelled, though
-statements are not executed.
+only Claude is exercised, and there is no provider picker in the UI. Mongo
+connections are saved and tunnelled, though statements are not executed.
+
+Gemini took the most work of the four and is worth writing down, because the
+documented answer is wrong twice over. The variable is `GEMINI_CLI_HOME`, not
+the `GEMINI_CONFIG_DIR` the docs describe, and it names the directory
+*containing* `.gemini` rather than `.gemini` itself. `GEMINI_FORCE_FILE_STORAGE`
+has to go with it, or the OAuth token never reaches that directory: it goes into
+the OS keychain under a service name and an account key that are both
+compile-time constants, which is one slot per machine, so a second Gemini
+account overwrites the first while both still look signed in. Both were read out
+of the gemini-cli source. `scratchpad/byok_check.py` starts a real gemini agent
+against a stand-in binary and reads what the child was handed, so the half this
+app is responsible for is watched working. The half it is not, whether the real
+CLI honours those two variables, was read rather than run: no Gemini CLI is
+installed on the machine this was written on.
 
 ## Contributing
 
 Pull requests are welcome, and so are bug reports that say what you did and what
 happened.
 
-**Getting set up** is the same four lines as the quick start. You need Go 1.24
+**Getting set up** is the same four lines as the quick start. You need Go 1.27
 and nothing else. `go test ./...` wants no browser and no network. The UI tests
 want a Chrome-family browser and sit behind a build tag; they launch their own
 headless copy on a throwaway profile and never touch a browser you are signed

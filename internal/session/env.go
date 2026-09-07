@@ -63,17 +63,16 @@ func isSessionScoped(key string) bool {
 	return false
 }
 
-// allProviders is every provider whose account variable we know about.
-var allProviders = []store.Provider{
-	store.ProviderClaude, store.ProviderCodex,
-	store.ProviderGrok, store.ProviderCursor,
-}
-
-// accountVars is the set of every provider's account-binding variable.
+// accountVars is the set of every variable any provider uses to bind an
+// account. Taken from the store rather than listed again here, so adding a
+// provider cannot leave a variable behind that the filter does not know about.
+// Gemini needs two of them, which is why this is a list and not one name per
+// provider: see store.Provider.AccountEnv.
 func accountVars() map[string]bool {
-	m := make(map[string]bool, len(allProviders))
-	for _, p := range allProviders {
-		m[strings.ToUpper(p.EnvVar())] = true
+	vars := store.AccountVars()
+	m := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		m[strings.ToUpper(v)] = true
 	}
 	return m
 }

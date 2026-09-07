@@ -96,6 +96,7 @@ def main():
     # endpoint. The agent's own setting must win over it.
     env["ANTHROPIC_BASE_URL"] = "https://inherited.example.invalid"
     env["ANTHROPIC_AUTH_TOKEN"] = "inherited-token-should-not-win"
+    env["PATH"] = os.path.join(home, "gemini-bin") + os.pathsep + env.get("PATH", "")
 
     proc = subprocess.Popen(
         [EXE, "--port", str(PORT), "--browser", "none"],
@@ -186,6 +187,54 @@ def main():
               SECRET_VALUE not in json.dumps(call("/sessions")))
 
         call("/sessions/%s" % sess["id"], "DELETE")
+
+        # --- and the same for a provider that binds with two variables --------
+        # Gemini is the awkward one. GEMINI_CLI_HOME names the directory
+        # containing .gemini rather than the config directory, and without
+        # GEMINI_FORCE_FILE_STORAGE the OAuth token goes to the OS keychain
+        # under two compile-time constants, which is one slot for the whole
+        # machine. Two accounts would then overwrite each other while both
+        # still looked signed in.
+        #
+        # The stand-in is put on PATH as `gemini` so a real spawn can be
+        # watched. What this cannot prove is that the real CLI honours the two
+        # variables; that was read out of its source.
+        gem_dir = os.path.join(home, "gemini-bin")
+        os.makedirs(gem_dir, exist_ok=True)
+        shutil.copyfile(FAKE, os.path.join(gem_dir, "gemini.exe" if WIN else "gemini"))
+        if not WIN:
+            os.chmod(os.path.join(gem_dir, "gemini"), 0o755)
+
+        gem_cfg = os.path.join(home, "gemini-acct", ".gemini")
+        os.makedirs(gem_cfg, exist_ok=True)
+        gem_acct = call("/accounts", "POST",
+                        {"name": "gem", "dir": gem_cfg, "provider": "gemini"})
+        gem_agent = call("/agents", "POST", {
+            "projectId": project["id"], "name": "Gem", "provider": "gemini",
+            "accountId": gem_acct["id"],
+        })
+        os.remove(dump)
+        gem_sess = call("/agents/%s/start" % gem_agent["id"], "POST", {"cols": 100, "rows": 30})
+        deadline = time.time() + 20
+        gem_child = None
+        while time.time() < deadline:
+            if os.path.exists(dump):
+                with open(dump, encoding="utf-8") as f:
+                    gem_child = json.load(f)
+                break
+            time.sleep(0.3)
+        if check("a gemini agent started and wrote its environment", gem_child is not None):
+            want_home = os.path.dirname(gem_cfg)
+            check("GEMINI_CLI_HOME points at the directory holding .gemini",
+                  os.path.normcase(gem_child.get("GEMINI_CLI_HOME") or "") == os.path.normcase(want_home),
+                  gem_child.get("GEMINI_CLI_HOME"))
+            check("the token is forced into that directory, not the machine keychain",
+                  gem_child.get("GEMINI_FORCE_FILE_STORAGE") == "true",
+                  gem_child.get("GEMINI_FORCE_FILE_STORAGE"))
+            check("no other provider's binding came along",
+                  "CLAUDE_CONFIG_DIR" not in gem_child and "CODEX_HOME" not in gem_child,
+                  ", ".join(k for k in ("CLAUDE_CONFIG_DIR", "CODEX_HOME") if k in gem_child))
+            call("/sessions/%s" % gem_sess["id"], "DELETE")
     finally:
         try:
             call("/quit", "POST", timeout=3)

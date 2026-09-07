@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"path/filepath"
+	"strings"
+	"time"
+)
 
 // Provider identifies an agent CLI family. v1 focuses on Claude Code but the
 // account model is provider-shaped from the start so Codex/Grok/Cursor drop in
@@ -12,9 +16,18 @@ const (
 	ProviderCodex  Provider = "codex"
 	ProviderGrok   Provider = "grok"
 	ProviderCursor Provider = "cursor"
+	ProviderGemini Provider = "gemini"
 )
 
+// Providers is every provider this app knows how to bind an account for.
+var Providers = []Provider{
+	ProviderClaude, ProviderCodex, ProviderGrok, ProviderCursor, ProviderGemini,
+}
+
 // EnvVar is the environment variable that rebinds a provider's active account.
+//
+// For Gemini this is the variable that moves the whole config tree rather than
+// one that names the config directory: see AccountEnv.
 func (p Provider) EnvVar() string {
 	switch p {
 	case ProviderCodex:
@@ -23,9 +36,76 @@ func (p Provider) EnvVar() string {
 		return "GROK_HOME"
 	case ProviderCursor:
 		return "CURSOR_CONFIG_DIR"
+	case ProviderGemini:
+		return "GEMINI_CLI_HOME"
 	default:
 		return "CLAUDE_CONFIG_DIR"
 	}
+}
+
+// AccountEnv is what has to be in the environment for a process to run on the
+// account whose config directory is dir.
+//
+// Four of the five providers need one variable naming that directory, and the
+// map exists for the fifth. Gemini needs two, and neither of them is what you
+// would guess:
+//
+//   - GEMINI_CLI_HOME, not GEMINI_CONFIG_DIR. The CLI resolves its home from
+//     that variable and then appends ".gemini" itself, so the value is the
+//     directory *containing* the config, not the config directory.
+//   - GEMINI_FORCE_FILE_STORAGE, because otherwise the OAuth token does not go
+//     into that directory at all. It goes into the OS keychain, under a service
+//     name and an account key that are both compile-time constants
+//     ("gemini-cli-oauth" and "main-account"). That is one slot per machine, so
+//     without this variable a second Gemini account overwrites the first and
+//     the isolation this whole app is about does not hold. Forcing the file
+//     backend puts the token in oauth_creds.json inside the config directory,
+//     where it belongs to that account alone.
+//
+// Read out of the gemini-cli source rather than its documentation, which
+// describes a GEMINI_CONFIG_DIR that the runtime does not read.
+//
+// scratchpad/byok_check.py starts a real gemini agent against a stand-in binary
+// and reads the environment the child was handed, so the half this app is
+// responsible for is watched working. The half it is not, whether the real CLI
+// honours these two variables, was read rather than run: no Gemini CLI is
+// installed on the machine this was written on.
+func (p Provider) AccountEnv(dir string) map[string]string {
+	if dir == "" {
+		return map[string]string{}
+	}
+	if p == ProviderGemini {
+		return map[string]string{
+			"GEMINI_CLI_HOME":           geminiHome(dir),
+			"GEMINI_FORCE_FILE_STORAGE": "true",
+		}
+	}
+	return map[string]string{p.EnvVar(): dir}
+}
+
+// geminiHome turns a config directory into the home the CLI should be given.
+//
+// An account already spelled ".../.gemini" is the CLI's own layout, so its
+// parent is the home. Anything else is a directory somebody chose for this
+// account, and it becomes the home itself, which puts the config at
+// "<dir>/.gemini". Both isolate; the second only nests one level deeper.
+func geminiHome(dir string) string {
+	clean := strings.TrimRight(dir, `/\`)
+	if strings.EqualFold(filepath.Base(clean), ".gemini") {
+		return filepath.Dir(clean)
+	}
+	return clean
+}
+
+// AccountVars is every variable that AccountEnv can set, for any provider. The
+// spawn filter drops all of them from an inherited environment, so a binding
+// from the launching shell can never survive into an agent.
+func AccountVars() []string {
+	out := []string{"GEMINI_FORCE_FILE_STORAGE"}
+	for _, p := range Providers {
+		out = append(out, p.EnvVar())
+	}
+	return out
 }
 
 // Bin is the default executable name for the provider.
@@ -37,6 +117,8 @@ func (p Provider) Bin() string {
 		return "grok"
 	case ProviderCursor:
 		return "cursor-agent"
+	case ProviderGemini:
+		return "gemini"
 	default:
 		return "claude"
 	}

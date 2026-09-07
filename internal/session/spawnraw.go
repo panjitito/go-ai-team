@@ -104,8 +104,10 @@ func (m *Manager) spawnRaw(o spawnRawOpts) (*Session, error) {
 	// agent's own variables are appended so the two sources stay distinguishable.
 	// Display only, and never the key: see endpoint.go.
 	s.Endpoint = endpointOf(o.Env, env)
-	if o.AccountDir != "" {
-		env = append(env, provider.EnvVar()+"="+o.AccountDir)
+	// Whatever it takes to bind this account, which is one variable for four of
+	// the five providers and two for Gemini.
+	for k, v := range provider.AccountEnv(o.AccountDir) {
+		env = append(env, k+"="+v)
 	}
 	if o.Kind == KindAgent && provider == store.ProviderClaude {
 		// See env.go: without this the CLI may skip its transcript, and the

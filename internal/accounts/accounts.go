@@ -57,6 +57,8 @@ func SystemDir(p store.Provider) string {
 		return filepath.Join(home, ".grok")
 	case store.ProviderCursor:
 		return filepath.Join(home, ".cursor")
+	case store.ProviderGemini:
+		return filepath.Join(home, ".gemini")
 	default:
 		return filepath.Join(home, ".claude")
 	}
@@ -291,10 +293,7 @@ func (m *Manager) Discover() []Discovered {
 		})
 	}
 
-	for _, p := range []store.Provider{
-		store.ProviderClaude, store.ProviderCodex,
-		store.ProviderGrok, store.ProviderCursor,
-	} {
+	for _, p := range store.Providers {
 		add(string(p)+" (default)", SystemDir(p), p, "provider default")
 	}
 
