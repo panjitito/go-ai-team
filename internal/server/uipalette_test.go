@@ -58,7 +58,7 @@ new Promise(async resolve => {
     ];
 
     const out = {};
-    // Opened by the keyboard, which is the whole point of it.
+    // Opened with Ctrl-K rather than by clicking anything.
     document.dispatchEvent(new KeyboardEvent('keydown',
       { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
     await sleep(150);

@@ -119,8 +119,8 @@ type convBlock struct {
 // A long-running session's transcript is not small: a real one here was 257MB,
 // and the conversation view polls it every 1.5 seconds. Reading the whole file
 // took 1.2 seconds of that, so the app would have spent most of its life
-// re-reading a file in order to show the last screenful of it, and the disk
-// would never have stopped. Only the last `limit` messages are ever displayed,
+// re-reading a file to show the last screenful of it, and the disk would never
+// have stopped. Only the last `limit` messages are ever displayed,
 // so only the tail is read — widened if that turns out not to hold enough.
 const (
 	convTailStart = 4 << 20

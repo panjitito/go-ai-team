@@ -8,10 +8,9 @@
 // pretending not to be one.
 //
 // Windows already has an embedded web view: WebView2, part of Edge and present
-// on every Windows 11 machine. Using it directly gives a real window — its own
-// taskbar button, its own icon, no omnibox, no tabs, no second browser process
-// tree — while the page inside is the same page. The binding is pure Go, so the
-// single no-cgo binary and its size are unchanged.
+// on every Windows 11 machine. Using it directly gives a real window with its
+// own taskbar button and icon, showing the same page and nothing around it. The
+// binding is pure Go, so the single no-cgo binary and its size are unchanged.
 //
 // The HTTP server keeps running exactly as before. The window is a client of it,
 // not a replacement for it, which is what keeps the phone working.
