@@ -196,6 +196,18 @@ func (s *Server) expandSecrets(in map[string]string) (map[string]string, error) 
 	return s.vault.ExpandEnv(in)
 }
 
+// agentEnv is an agent's environment, with its secrets resolved.
+//
+// Dev terminals have had this since the vault was built and agents never did,
+// so an agent given ANTHROPIC_AUTH_TOKEN={{secret:NAME}} started with that
+// twenty-six character string as its key and failed to authenticate against a
+// provider that was configured perfectly. The vault exists to keep a key off
+// the screen and out of the API; leaving agents out of it meant the one place
+// people would most want to use it was the one place it did not work.
+func (s *Server) agentEnv(a *store.Agent) (map[string]string, error) {
+	return s.expandSecrets(a.Env)
+}
+
 // ---------- secrets ----------
 
 // listSecrets returns names only. There is deliberately no endpoint that

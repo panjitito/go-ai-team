@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -991,6 +992,13 @@ func (s *Server) forkAgent(w http.ResponseWriter, r *http.Request) {
 		resume = sess.Public().ClaudeSessionID
 	}
 
+	twinEnv, err := s.agentEnv(twin)
+	if err != nil {
+		_ = s.st.DeleteAgent(twin.ID)
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+
 	ns, err := s.sm.Spawn(session.SpawnOpts{
 		Kind:      session.KindAgent,
 		AgentID:   twin.ID,
@@ -998,7 +1006,7 @@ func (s *Server) forkAgent(w http.ResponseWriter, r *http.Request) {
 		Provider:  a.Provider,
 		CWD:       p.Path,
 		Args:      s.sm.AgentArgs(twin),
-		Env:       twin.Env,
+		Env:       twinEnv,
 		ResumeID:  resume,
 		Cols:      120, Rows: 36,
 	})
@@ -1042,10 +1050,18 @@ func (s *Server) doRestore(w http.ResponseWriter, r *http.Request) {
 			if _, ok := s.sm.SessionForAgent(a.ID); ok {
 				continue
 			}
+			// One agent whose secret has gone missing does not fail the whole
+			// restore. The others still come back and this one is counted.
+			env, err := s.agentEnv(a)
+			if err != nil {
+				log.Printf("restore %s: %v", a.Name, err)
+				failed++
+				continue
+			}
 			if _, err := s.sm.Spawn(session.SpawnOpts{
 				Kind: session.KindAgent, AgentID: a.ID, ProjectID: a.ProjectID,
 				Provider: a.Provider, CWD: p.Path, Args: s.sm.AgentArgs(a),
-				Env: a.Env, ResumeID: e.SessionID, Cols: 120, Rows: 36,
+				Env: env, ResumeID: e.SessionID, Cols: 120, Rows: 36,
 			}); err != nil {
 				failed++
 				continue

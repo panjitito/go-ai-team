@@ -838,6 +838,12 @@ func (s *Server) startAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	env, err := s.agentEnv(a)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+
 	sess, err := s.sm.Spawn(session.SpawnOpts{
 		Kind:      session.KindAgent,
 		AgentID:   a.ID,
@@ -846,7 +852,7 @@ func (s *Server) startAgent(w http.ResponseWriter, r *http.Request) {
 		CWD:       cwd,
 		Branch:    branch,
 		Args:      s.sm.AgentArgs(a),
-		Env:       a.Env,
+		Env:       env,
 		Cols:      req.Cols,
 		Rows:      req.Rows,
 		ResumeID:  req.ResumeID,
