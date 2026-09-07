@@ -490,9 +490,12 @@ func AddWorktree(ctx context.Context, dir, path, branch string) (Worktree, error
 	if err != nil {
 		return Worktree{}, err
 	}
+	// SamePath, not a string compare: git prints the long form of a path and
+	// the caller may hold the 8.3 alias for it. Getting that wrong asks git to
+	// add a worktree that is already there, which fails outright.
 	want := filepath.Clean(path)
 	for _, wt := range existing {
-		if strings.EqualFold(wt.Path, want) {
+		if SamePath(wt.Path, want) {
 			return wt, nil
 		}
 	}
@@ -514,7 +517,7 @@ func AddWorktree(ctx context.Context, dir, path, branch string) (Worktree, error
 		return Worktree{}, err
 	}
 	for _, wt := range list {
-		if strings.EqualFold(wt.Path, want) {
+		if SamePath(wt.Path, want) {
 			return wt, nil
 		}
 	}
@@ -559,6 +562,37 @@ func RemoveWorktree(ctx context.Context, dir, path string, force bool) error {
 // check would be a process. Exactly one match is used. Several is not a
 // question this can answer — which of two repositories did you mean — and
 // guessing at it would be worse than saying so.
+// RealPath is a directory's canonical name, for comparing one path against
+// another.
+//
+// Windows keeps an 8.3 alias for any name too long for it, and the two spellings
+// address the same directory while comparing unequal as strings. It is not a
+// museum piece: TEMP on a GitHub Actions runner is C:\Users\RUNNER~1\AppData\
+// Local\Temp, so every path built from t.TempDir() there is the short form,
+// while git prints the long one. Two things broke on exactly that. AddWorktree
+// did not recognise a worktree it had already made and asked git to make it
+// again, and the diff pane decided a file was outside its own repository.
+//
+// EvalSymlinks resolves the alias and the symlinks together, which is what
+// "the same directory" has to mean. A path that does not exist yet cannot be
+// resolved and is cleaned instead, which is the best available answer and no
+// worse than what came before.
+func RealPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return filepath.Clean(real)
+	}
+	return filepath.Clean(p)
+}
+
+// SamePath reports whether two paths name the same directory. Case-insensitive,
+// because this is mostly Windows and a drive letter arrives both ways.
+func SamePath(a, b string) bool {
+	return strings.EqualFold(RealPath(a), RealPath(b))
+}
+
 func FindRepo(dir string) (string, bool) {
 	if dir == "" {
 		return "", false

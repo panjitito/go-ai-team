@@ -131,10 +131,18 @@ func repoPath(project, repo, path string) (rel string, why string) {
 	if strings.TrimSpace(path) == "" {
 		return "", "" // the whole tree
 	}
+	// The repository root comes from git, which prints a path in full. The
+	// project comes from the store, which holds whatever was typed in — and on
+	// Windows that can be the 8.3 alias for the same directory. Comparing the
+	// two spellings put files inside the repository outside it. gitx.RealPath
+	// resolves both to one name.
+	repo = gitx.RealPath(repo)
+	project = gitx.RealPath(project)
+
 	clean := filepath.Clean(filepath.FromSlash(path))
 	if filepath.IsAbs(clean) {
 		// Already absolute: only useful if it is inside the repository.
-		if rel, err := filepath.Rel(repo, clean); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, err := filepath.Rel(repo, gitx.RealPath(clean)); err == nil && !strings.HasPrefix(rel, "..") {
 			return filepath.ToSlash(rel), ""
 		}
 		return "", "That file is outside the repository, so there is no diff for it."
