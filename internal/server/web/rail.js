@@ -80,17 +80,24 @@ function renderRail(d, sessionId) {
 
   const list = el('div', { class: 'rail-list' });
   for (const f of files) {
+    const away = outsideProject(f.rel);
     list.append(el('div', {
-      class: 'rail-item',
-      title: f.path,
+      class: 'rail-item' + (away ? ' away' : ''),
+      title: away ? f.path + ' (outside the project)' : f.path,
       onclick: () => openChangedFile(sessionId, f),
     },
       el('span', { class: 'rail-mark' + (f.created ? ' new' : ''), text: f.created ? '+' : '·' }),
       el('span', { class: 'rail-name' },
         el('span', { class: 'rail-file', text: f.name }),
         // The directory is what tells two files of the same name apart, and
-        // nothing more, so it is quiet and truncates from the left.
-        dirOf(f.rel) ? el('span', { class: 'rail-dir', text: dirOf(f.rel) }) : null),
+        // nothing more, so it is quiet and truncates from the left. For a file
+        // outside the project that is the whole path, and saying so is the
+        // point: it is why there is no diff to show for it.
+        // An outside path is Windows-shaped and has no "/" in it, so it must not
+        // depend on dirOf finding one — that is the whole reason it is here.
+        (away || dirOf(f.rel))
+          ? el('span', { class: 'rail-dir', text: away ? 'outside the project' : dirOf(f.rel) })
+          : null),
       f.edits > 1 ? el('span', { class: 'rail-edits', text: '×' + f.edits }) : null));
   }
   rail.append(list);
@@ -111,8 +118,12 @@ async function openChangedFile(sessionId, f) {
   const projectId = sess && sess.projectId;
   const body = el('div', { id: 'railDiff' }, el('div', { class: 'hint', text: 'Loading…' }));
 
-  modal(f.rel, body, [
-    ['Open in Files', 'btn', async () => {
+  const buttons = [['Close', 'btn', closeModal]];
+  // Only offered where it can actually be done. The file browser opens paths
+  // inside the project and refuses everything else, so putting the button on a
+  // file that lives elsewhere is an invitation to an error message.
+  if (!outsideProject(f.rel)) {
+    buttons.unshift(['Open in Files', 'btn', async () => {
       closeModal();
       const p = projectById(projectId);
       if (!p) return;
@@ -123,28 +134,57 @@ async function openChangedFile(sessionId, f) {
       render();
       await new Promise(r => setTimeout(r, 60));
       openFile(p, f.rel).catch(e => toast(e.message, 'bad'));
-    }],
-    ['Close', 'btn', closeModal],
-  ], true);
+    }]);
+  }
+  modal(f.name || f.rel, body, buttons, true);
+
+  // A file the agent wrote outside the project — its own memory, something in a
+  // sibling directory — has no relative path and never had one. Asking git
+  // about it, or asking the file reader that only opens paths inside the
+  // project, both end in a refusal that reads like a fault. Say where it is
+  // instead of failing at it.
+  if (outsideProject(f.rel)) {
+    body.innerHTML = '';
+    body.append(
+      el('div', { class: 'hint', text:
+        'This is outside the project, so there is no diff for it here and the ' +
+        'file browser will not open it.' }),
+      el('pre', { class: 'tool-pre', text: f.rel }));
+    return;
+  }
 
   try {
     const res = await fetch(`/api/git/diff?projectId=${encodeURIComponent(projectId)}` +
       `&path=${encodeURIComponent(f.rel)}`);
     const text = await res.text();
+    const isDiff = res.headers.get('X-Diff-Kind') === 'diff' || looksLikeDiff(text);
     body.innerHTML = '';
-    if (res.ok && text.trim()) {
+    if (res.ok && isDiff && text.trim()) {
       body.append(renderDiff(text));
       return;
     }
-    // No diff: committed already, not a repository, or a file git does not
-    // track. Show the file, and say which it is rather than an empty pane.
+    // Not a diff: committed already, not a repository, or a file git does not
+    // track. Show the file — and say why, in the server's own words when it
+    // gave them. It used to say "no uncommitted diff" over a project that had
+    // no repository at all, which is a different thing and a worse answer.
+    const why = res.ok && text.trim() && !isDiff
+      ? text.trim()
+      : 'No uncommitted diff for this file — showing it as it stands.';
     const data = await api(`/files/read?projectId=${encodeURIComponent(projectId)}` +
       `&path=${encodeURIComponent(f.rel)}`);
     body.append(
-      el('div', { class: 'hint', text: 'No uncommitted diff for this file — showing it as it stands.' }),
+      el('div', { class: 'hint', text: why }),
       viewerEl(data.content || '', f.rel));
   } catch (e) {
     body.innerHTML = '';
     body.append(el('div', { class: 'hint', text: e.message }));
   }
+}
+
+// outsideProject reports whether a rail entry kept its absolute path, which is
+// what the collector does for anything it could not make relative to the
+// agent's working directory.
+function outsideProject(rel) {
+  const s = String(rel || '');
+  return /^[A-Za-z]:[\\/]/.test(s) || s.startsWith('/') || s.startsWith('\\\\');
 }

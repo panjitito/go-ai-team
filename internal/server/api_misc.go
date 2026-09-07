@@ -156,8 +156,16 @@ func (s *Server) gitDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !gitx.IsRepo(dir) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("This project is not a git repository, so there is no diff to show."))
+		// X-Diff-Kind, because the body here is a sentence and the body of a
+		// successful call is a unified diff, and the caller was telling them
+		// apart by whether it was empty.
+		//
+		// It is not empty: this explanation went straight into the diff parser,
+		// which found no hunks in it and said "No textual diff (binary, or no
+		// change)". So a project with no repository — which is most of a new
+		// one — reported every file the agent had just rewritten as unchanged.
+		// The reason was right there in the response and was thrown away.
+		diffMessage(w, "This project is not a git repository, so there is no diff to show.")
 		return
 	}
 	staged := r.URL.Query().Get("staged") == "1"
@@ -167,7 +175,16 @@ func (s *Server) gitDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Diff-Kind", "diff")
 	_, _ = w.Write([]byte(out))
+}
+
+// diffMessage answers the diff endpoint with prose rather than a diff, labelled
+// so the caller does not have to guess which it got.
+func diffMessage(w http.ResponseWriter, why string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Diff-Kind", "message")
+	_, _ = w.Write([]byte(why))
 }
 
 type pathsReq struct {

@@ -1039,6 +1039,12 @@ table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
    and the text each keep a column of their own and the eye never has to hunt
    for where the next one starts. */
 
+/* A changed file that lives outside the project: still worth listing — the
+   agent did change it — but there is no diff to show and the file browser
+   will not open it, so it reads quieter than the rest. */
+.rail-item.away .rail-file { color: var(--fg-dim); }
+.rail-item.away .rail-dir { font-style: italic; }
+
 .act-wrap { padding: 10px 16px 24px; overflow-y: auto; }
 .act-day {
   position: sticky; top: 0; z-index: 1;

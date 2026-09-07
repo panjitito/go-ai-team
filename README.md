@@ -464,6 +464,17 @@ that review had not caught. Each keeps its own evidence:
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
+- **An explanation is not a diff.** The diff endpoint answered "This project is
+  not a git repository" as a 200 with a body, and the caller decided what it had
+  by asking whether the body was empty. It was not, so the sentence went into
+  the diff parser, which found no hunks and reported "No textual diff (binary,
+  or no change)" — every file an agent had just rewritten, in any project
+  without a repository, shown as unchanged. The reason was in the response the
+  whole time. Answers are labelled now, and the parser refuses to read prose.
+- **The split diff drew the wrong side.** The inline mark on an added line was
+  taken from the line it replaced, so renaming `foo` to `bar` left the "after"
+  column still saying `foo` — in the default view, on every single-line edit.
+  Found by a test written for the bug above.
 - **The folder-trust box is not numbered, and nothing else is like it.** Every
   other question Claude Code asks is a numbered list, so the parser required a
   digit after the cursor. The trust prompt — the first thing every new project

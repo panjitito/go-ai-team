@@ -85,9 +85,15 @@ function pairRows(rows) {
   return out;
 }
 
-// inlineParts splits two versions of a line into [common prefix, changed middle,
-// common suffix]. Cheap, and it catches what people actually do to a line:
-// change a word, a number, a name.
+// inlineParts splits a line into [common prefix, changed middle, common suffix]
+// against the version it replaced. Cheap, and it catches what people actually do
+// to a line: change a word, a number, a name.
+//
+// The middle is always taken from `a`, the line being drawn. It used to return
+// the middle of both and let the caller choose, and the caller chose the other
+// one for an added line — so the right-hand side of a split diff drew the
+// fragment from the left. Rename foo to bar and the "after" column still said
+// foo, in the default view, on every single-line edit.
 function inlineParts(a, b) {
   let p = 0;
   while (p < a.length && p < b.length && a[p] === b[p]) p++;
@@ -96,8 +102,7 @@ function inlineParts(a, b) {
          a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
   return {
     pre: a.slice(0, p),
-    aMid: a.slice(p, a.length - s),
-    bMid: b.slice(p, b.length - s),
+    mid: a.slice(p, a.length - s),
     post: a.slice(a.length - s),
   };
 }
@@ -110,8 +115,7 @@ function cellText(host, text, other, kind) {
     host.append(document.createTextNode(text === '' ? ' ' : text));
     return;
   }
-  const { pre, aMid, bMid, post } = inlineParts(text, other);
-  const mid = kind === 'del' ? aMid : bMid;
+  const { pre, mid, post } = inlineParts(text, other);
   // Nothing in common, or everything: not worth marking a fragment.
   if (!pre && !post) {
     host.append(document.createTextNode(text === '' ? ' ' : text));
@@ -122,11 +126,36 @@ function cellText(host, text, other, kind) {
   if (post) host.append(document.createTextNode(post));
 }
 
+// looksLikeDiff says whether a response is a unified diff or something else.
+//
+// The something else is usually an explanation, and an explanation put through
+// the diff parser comes out as "No textual diff (binary, or no change)" — the
+// app telling you the file is unchanged when what it meant was that this
+// project has no git repository. The reason was in the response all along.
+//
+// The server labels its answers now, so this is the second line of defence and
+// not the only one; it stays because a parser that will read anything as a diff
+// is a parser that will one day report prose as a change.
+function looksLikeDiff(text) {
+  if (!text) return false;
+  for (const line of String(text).split('\n', 40)) {
+    if (/^(diff --git |index [0-9a-f]{4,}|--- |\+\+\+ |@@ |new file mode |deleted file mode |Binary files )/.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // renderDiff draws a unified diff. Split by default, with a toggle.
 function renderDiff(text) {
   const box = el('div', { class: 'diffv' });
   if (!text || !text.trim()) {
     box.append(el('div', { class: 'hint', style: 'padding:14px', text: 'No textual diff (binary, or no change).' }));
+    return box;
+  }
+  if (!looksLikeDiff(text)) {
+    // Whatever it is, it is not a diff. Show it as what it is.
+    box.append(el('div', { class: 'hint', style: 'padding:14px', text: String(text).trim() }));
     return box;
   }
 
