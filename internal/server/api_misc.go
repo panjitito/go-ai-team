@@ -96,14 +96,105 @@ func (s *Server) projectDir(r *http.Request) (string, *store.Project, error) {
 
 // ---------- git ----------
 
+// gitDir is the repository a project's git operations run in.
+//
+// Not always the project directory. A project kept as a working folder — the
+// checkout in it, beside notes, credentials and a scratch script — is not a
+// repository itself, and every git feature in the app was answering about the
+// folder rather than about the code in it: "this project is not a git
+// repository" on a checkout with a hundred commits, and an empty review pane.
+//
+// gitx.FindRepo settles it, and refuses to guess when there is more than one.
+func (s *Server) gitDir(r *http.Request) (repo string, dir string, p *store.Project, err error) {
+	dir, p, err = s.projectDir(r)
+	if err != nil {
+		return "", "", nil, err
+	}
+	repo, _ = gitx.FindRepo(dir)
+	return repo, dir, p, nil
+}
+
+// repoPath works out which file a caller means, and where git can see it.
+//
+// The two callers name a file differently. The rail lists what an agent wrote,
+// relative to the project; the review pane lists what git said, relative to the
+// repository. While those are the same directory the difference never shows —
+// with the repository one level down they are not the same, so both readings
+// are tried and the one that exists on disk wins. A file that exists as
+// neither is left as the project reading, because a deleted file still has a
+// diff and is exactly what somebody wants to see.
+//
+// The empty string for `why` means git can answer. Anything else is the reason
+// it cannot, in words meant for the person reading.
+func repoPath(project, repo, path string) (rel string, why string) {
+	if strings.TrimSpace(path) == "" {
+		return "", "" // the whole tree
+	}
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if filepath.IsAbs(clean) {
+		// Already absolute: only useful if it is inside the repository.
+		if rel, err := filepath.Rel(repo, clean); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel), ""
+		}
+		return "", "That file is outside the repository, so there is no diff for it."
+	}
+
+	fromProject := filepath.Join(project, clean)
+	fromRepo := filepath.Join(repo, clean)
+	pick := fromProject
+	if _, err := os.Stat(fromProject); err != nil {
+		if _, err := os.Stat(fromRepo); err == nil {
+			pick = fromRepo
+		}
+	}
+
+	rel, err := filepath.Rel(repo, pick)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		// Inside the project and outside the repository: the notes and scripts
+		// that live beside a checkout. Saying so is more use than an empty pane.
+		return "", "This file is in the project but outside the repository, so git has nothing to say about it."
+	}
+	return filepath.ToSlash(rel), ""
+}
+
+// repoOf is gitDir for the handlers that take the project in a JSON body rather
+// than a query string. Same rule: the repository the project's work belongs to,
+// which is not always the project directory.
+func (s *Server) repoOf(projectID string) (repo string, p *store.Project, err error) {
+	p, err = s.st.Project(projectID)
+	if err != nil {
+		return "", nil, err
+	}
+	repo, ok := gitx.FindRepo(p.Path)
+	if !ok {
+		return "", p, fmt.Errorf("no git repository in %s, or more than one — "+
+			"point the project at the checkout itself", p.Path)
+	}
+	return repo, p, nil
+}
+
+// repoOrPath is the repository for a project, or the project directory when
+// there is none — for the things that want somewhere to write either way.
+func repoOrPath(p *store.Project) string {
+	if repo, ok := gitx.FindRepo(p.Path); ok {
+		return repo
+	}
+	return p.Path
+}
+
 // gitStatus returns the working tree plus per-agent attribution, so five agents
 // writing to one repository can still be reviewed one agent at a time.
 func (s *Server) gitStatus(w http.ResponseWriter, r *http.Request) {
-	dir, p, err := s.projectDir(r)
+	repo, projectDir, p, err := s.gitDir(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if repo == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"isRepo": false, "path": projectDir})
+		return
+	}
+	dir := repo
 	st, err := gitx.GetStatus(r.Context(), dir)
 	if err != nil {
 		if errors.Is(err, gitx.ErrNotRepo) {
@@ -150,12 +241,12 @@ func (s *Server) gitStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) gitDiff(w http.ResponseWriter, r *http.Request) {
-	dir, _, err := s.projectDir(r)
+	repo, dir, _, err := s.gitDir(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if !gitx.IsRepo(dir) {
+	if repo == "" {
 		// X-Diff-Kind, because the body here is a sentence and the body of a
 		// successful call is a unified diff, and the caller was telling them
 		// apart by whether it was empty.
@@ -168,8 +259,13 @@ func (s *Server) gitDiff(w http.ResponseWriter, r *http.Request) {
 		diffMessage(w, "This project is not a git repository, so there is no diff to show.")
 		return
 	}
+	rel, why := repoPath(dir, repo, r.URL.Query().Get("path"))
+	if why != "" {
+		diffMessage(w, why)
+		return
+	}
 	staged := r.URL.Query().Get("staged") == "1"
-	out, err := gitx.Diff(r.Context(), dir, r.URL.Query().Get("path"), staged)
+	out, err := gitx.Diff(r.Context(), repo, rel, staged)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -199,15 +295,15 @@ func (s *Server) gitStage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	p, err := s.st.Project(req.ProjectID)
+	repo, _, err := s.repoOf(req.ProjectID)
 	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}
 	if req.All {
-		err = gitx.StageAll(r.Context(), p.Path)
+		err = gitx.StageAll(r.Context(), repo)
 	} else {
-		err = gitx.Stage(r.Context(), p.Path, req.Paths)
+		err = gitx.Stage(r.Context(), repo, req.Paths)
 	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -222,12 +318,12 @@ func (s *Server) gitUnstage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	p, err := s.st.Project(req.ProjectID)
+	repo, _, err := s.repoOf(req.ProjectID)
 	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}
-	if err := gitx.Unstage(r.Context(), p.Path, req.Paths); err != nil {
+	if err := gitx.Unstage(r.Context(), repo, req.Paths); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
@@ -250,13 +346,13 @@ func (s *Server) gitCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	p, err := s.st.Project(req.ProjectID)
+	repo, p, err := s.repoOf(req.ProjectID)
 	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}
 	if req.StageAll {
-		if err := gitx.StageAll(r.Context(), p.Path); err != nil {
+		if err := gitx.StageAll(r.Context(), repo); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
@@ -270,7 +366,7 @@ func (s *Server) gitCommit(w http.ResponseWriter, r *http.Request) {
 		message += "\n\nAgent-Conversation: " + ctxFile
 	}
 
-	hash, err := gitx.Commit(r.Context(), p.Path, message)
+	hash, err := gitx.Commit(r.Context(), repo, message)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -320,7 +416,7 @@ func (s *Server) writeCommitContext(p *store.Project, agentID string) (string, b
 		fmt.Fprintf(&b, "## %s\n\n%s\n\n", who, redactSecrets(t.Text))
 	}
 
-	dir := filepath.Join(p.Path, ".goaiteam", "commit-context")
+	dir := filepath.Join(repoOrPath(p), ".goaiteam", "commit-context")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", false
 	}
@@ -365,15 +461,15 @@ func isTokenChar(c byte) bool {
 }
 
 func (s *Server) gitLog(w http.ResponseWriter, r *http.Request) {
-	dir, _, err := s.projectDir(r)
+	dir, _, _, err := s.gitDir(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	// A project that is not a repository is a normal state, not an error — the
-	// same answer git/status gives. Returning a raw git failure here would make
-	// every caller special-case it, and the first version did exactly that.
-	if !gitx.IsRepo(dir) {
+	// A project with no repository is a normal state, not an error — the same
+	// answer git/status gives. Returning a raw git failure here would make every
+	// caller special-case it, and the first version did exactly that.
+	if dir == "" {
 		writeJSON(w, http.StatusOK, []gitx.Log{})
 		return
 	}
@@ -403,12 +499,12 @@ func (s *Server) gitMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	p, err := s.st.Project(req.ProjectID)
+	repo, _, err := s.repoOf(req.ProjectID)
 	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}
-	diff, err := gitx.StagedDiff(r.Context(), p.Path)
+	diff, err := gitx.StagedDiff(r.Context(), repo)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -423,7 +519,7 @@ func (s *Server) gitMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
-	msg, err := s.ai.CommitMessage(ctx, p.Path, diff, req.Draft, s.st.Settings().CommitFormat)
+	msg, err := s.ai.CommitMessage(ctx, repo, diff, req.Draft, s.st.Settings().CommitFormat)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 		return
@@ -444,6 +540,14 @@ func (s *Server) gitInit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, statusFor(err), err)
 		return
 	}
+	// Refused rather than nested. A folder that already holds a checkout does
+	// not want a second repository wrapped around it, and somebody clicking
+	// "initialise" here has misread the situation rather than asked for that.
+	if found, ok := gitx.FindRepo(p.Path); ok {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf(
+			"there is already a repository at %s; this project uses that one", found))
+		return
+	}
 	if err := gitx.Init(r.Context(), p.Path); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -460,12 +564,12 @@ func (s *Server) gitBranch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	p, err := s.st.Project(req.ProjectID)
+	repo, _, err := s.repoOf(req.ProjectID)
 	if err != nil {
 		writeErr(w, statusFor(err), err)
 		return
 	}
-	if err := gitx.CreateBranch(r.Context(), p.Path, req.Name); err != nil {
+	if err := gitx.CreateBranch(r.Context(), repo, req.Name); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}

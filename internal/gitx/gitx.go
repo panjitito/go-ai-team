@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -536,4 +537,67 @@ func RemoveWorktree(ctx context.Context, dir, path string, force bool) error {
 	args = append(args, path)
 	_, err := run(ctx, dir, args...)
 	return err
+}
+
+// FindRepo locates the repository a project's git operations belong to.
+//
+// Two layouts, and only the first used to work.
+//
+// A project inside a repository is handled by git itself: rev-parse walks up
+// from wherever it is started, so pointing the app at a subdirectory has always
+// been fine.
+//
+// A project *containing* a repository was not. It is an ordinary way to keep
+// things — a working folder with the checkout in it beside notes, credentials
+// and a scratch script — and there the project directory is not a repository at
+// all. Every diff came back "This project is not a git repository", which was
+// true of the folder and useless about the file, and the review pane was empty
+// on a project with a hundred commits in it.
+//
+// So one level down is searched too, by looking for .git rather than by running
+// git at each child: a working folder can have a dozen subdirectories and each
+// check would be a process. Exactly one match is used. Several is not a
+// question this can answer — which of two repositories did you mean — and
+// guessing at it would be worse than saying so.
+func FindRepo(dir string) (string, bool) {
+	if dir == "" {
+		return "", false
+	}
+	// Inside one already, at this level or above.
+	if out, err := run(context.Background(), dir, "rev-parse", "--show-toplevel"); err == nil {
+		if root := strings.TrimSpace(out); root != "" {
+			return filepath.FromSlash(root), true
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	var found []string
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") || e.Name() == "node_modules" {
+			continue
+		}
+		// .git is a directory in a normal clone and a file in a worktree or a
+		// submodule. Either means a repository lives here.
+		if _, err := os.Stat(filepath.Join(dir, e.Name(), ".git")); err != nil {
+			continue
+		}
+		found = append(found, filepath.Join(dir, e.Name()))
+		if len(found) > 1 {
+			return "", false // ambiguous, and a guess would be worse than none
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	// Confirmed with git rather than trusted from the file name, and reported as
+	// git sees it, so a worktree or a submodule resolves to its real root.
+	if out, err := run(context.Background(), found[0], "rev-parse", "--show-toplevel"); err == nil {
+		if root := strings.TrimSpace(out); root != "" {
+			return filepath.FromSlash(root), true
+		}
+	}
+	return "", false
 }

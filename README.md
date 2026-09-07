@@ -464,6 +464,15 @@ that review had not caught. Each keeps its own evidence:
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
+- **The repository is not always the project directory.** A project kept as a
+  working folder — the checkout inside it, beside notes, credentials and a
+  scratch script — is not a repository itself, so every git feature answered
+  about the folder instead of the code in it: no diffs, an empty review pane, no
+  commit messages, on a checkout with a hundred commits. git walks *up* on its
+  own, which is why a project inside a repository always worked; one level down
+  is now searched too, and more than one candidate is reported rather than
+  guessed at. A file that lives beside the checkout says so instead of showing
+  an empty pane.
 - **An explanation is not a diff.** The diff endpoint answered "This project is
   not a git repository" as a 200 with a body, and the caller decided what it had
   by asking whether the body was empty. It was not, so the sentence went into
