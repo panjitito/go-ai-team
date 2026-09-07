@@ -1,7 +1,22 @@
-# Captured terminal output, stored verbatim.
+# Line endings.
 #
-# These fixtures are raw pty bytes — escape sequences and CRLF pairs are the
-# thing being tested. With autocrlf on, git rewrote the line endings on the way
-# in and the files that came back out of a clone were not the ones the parser
-# was written against.
-internal/session/testdata/*.bin -text
+# LF everywhere, including in a Windows working tree. gofmt treats a file with
+# CRLF as unformatted, and the Windows CI runner checks out with autocrlf on by
+# default, so the first run failed the gofmt step on all 118 files at once.
+# Pinning it here fixes that for every machine rather than for the runner alone,
+# and it also ends the "LF will be replaced by CRLF" warning on every commit.
+* text=auto eol=lf
+
+# Captured terminal output, byte for byte.
+#
+# internal/session/testdata holds real bytes a pseudo-console emitted, escape
+# sequences and carriage returns included. The CRs are part of what the terminal
+# sent, not line endings: ask_login.bin has 58 of them and the parser under test
+# has to cope with exactly that. Normalising these would quietly rewrite the
+# evidence and leave the tests passing against a fixture no terminal ever
+# produced.
+*.bin -text
+
+*.png binary
+*.jpg binary
+*.ico binary
