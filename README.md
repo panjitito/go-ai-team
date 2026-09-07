@@ -1,10 +1,35 @@
-# Go AI Team
+<h1>Go AI Team</h1>
 
-An open cockpit for Claude Code and friends: run every account you own side by
-side, drive a board, schedule and trigger agents, review what they wrote, and
-let them drive the app back through MCP.
+**Run every Claude Code account you own, side by side, in one window.**
 
-One binary. No Electron, no `npm install`, no subscription.
+A cockpit for people who keep more than one agent working at once: a board of
+who is doing what, the conversation rendered rather than scraped, permission
+prompts as buttons, and a search across every transcript on your disk.
+
+[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/desktop-Windows-0078D4?logo=windows&logoColor=white)](#install)
+[![Phone](https://img.shields.io/badge/phone-same%20URL-8b5cf6)](#from-your-phone)
+
+**One binary.** No Electron, no `npm install`, no subscription, no API key. It
+never proxies Anthropic and never sees a credential — it decides which
+directory a process starts in, and reads the files the CLI already wrote.
+
+![The agent board](docs/img/grid.png)
+
+---
+
+## Sixty seconds
+
+```bash
+git clone https://github.com/panjitito/go-ai-team.git
+cd go-ai-team
+go build -o go-ai-team.exe .
+./go-ai-team.exe
+```
+
+A window opens. Add an account (or point at the `~/.claude` you already have),
+add a project, add an agent, press start. Nothing else to configure.
 
 ```
 go-ai-team.exe
@@ -19,6 +44,52 @@ go-ai-team.exe
 go-ai-team.exe mcp --project <id>
   └─ JSON-RPC on stdio       → 16 tools an agent can call back into
 ```
+
+---
+
+## A look around
+
+### The conversation, not the terminal
+
+![A conversation, with a tool call opened out](docs/img/conversation.png)
+
+Rendered from the transcript the CLI writes, so a tool call is a diff and not a
+wall of escaped newlines. The plan the agent is working through sits above the
+composer — *2/5 · Write the migration and back-fill* — and the files it has
+touched sit down the right, newest first, with a mark for the ones it created.
+The terminal is one toggle away when you want it.
+
+### Go to anything — <kbd>Ctrl</kbd> <kbd>K</kbd>
+
+![The go-to palette](docs/img/palette.png)
+
+Every agent, project, panel and view, filtered as you type. Agents first and
+carrying their state, because *which one wanted me* is the question being asked
+most of the time: one waiting on an answer sorts above one that is working,
+which sorts above one that is idle. Matching is a subsequence, so `bkw` finds
+**Backend worker**.
+
+### Search everything the agents ever said — <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd>
+
+![Searching every transcript](docs/img/search.png)
+
+Every message, every tool call, every result, across every account. 2.4 GB and
+1,127 transcripts on the machine this was built on, read in 2.7 seconds — the
+scan is a raw substring match over the bytes, and JSON is parsed only for the
+lines that already matched. The footer says how much it actually read, because
+*nothing found* and *nothing found in the part I had time for* are different
+answers.
+
+### What happened while you were out
+
+![The activity log](docs/img/activity.png)
+
+Agents run for hours and you do not. The log is kept by the server rather than
+the page, so it covers the night nobody had it open: which agent asked
+something at 09:41, which account ran out of quota at 23:57 and handed its work
+to another, and which session died at 02:14 and how.
+
+---
 
 ## Why this exists
 
@@ -426,8 +497,8 @@ never touches a profile a person is signed into — not yours, and not the app's
 own. It is behind a build tag so the ordinary suite stays fast and needs no
 browser installed.
 
-181 tests in the fast suite and 15 more behind the UI tag. Covered: the cwd encoder against real transcript directories, the
-cascade in every direction, provider isolation, dangling references, folder
+**205 tests in the fast suite, 18 more behind the UI tag.** Covered: the cwd
+encoder against real transcript directories, the cascade in every direction, provider isolation, dangling references, folder
 cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
 detector's true and false positives, environment filtering, credential auth
 states, schedule arithmetic including short months, webhook signatures and
@@ -435,8 +506,11 @@ gating, SQL write/stacked-statement classification, vault round-trips including
 "the value is not readable on disk", the MCP protocol and its project scope,
 JSON salvage, the list-endpoint contract, and the browser profile's preference seeding.
 
-Several of those exist because the code was run for real and something broke
-that review had not caught. Each keeps its own evidence:
+### Bugs that only showed up when it was run
+
+Several of those tests exist because the code was run for real and something
+broke that review had not caught. Each one keeps its own evidence, because a
+regression test with no story attached is a test somebody eventually deletes.
 
 - **The pseudo-terminal must be closed exactly once.** A second
   `ClosePseudoConsole` on a closed handle ends the whole process on Windows —
@@ -526,6 +600,40 @@ Figma capture, a remote-fleet relay, and the non-Claude providers — the accoun
 model is provider-shaped and the env vars are wired, but only Claude is exercised.
 Mongo connections are saved and tunnelled but statements are not executed.
 
+## Contributing
+
+Pull requests are welcome, and so are bug reports that say what you did and what
+happened.
+
+**Getting set up** is the same four lines as the quick start — Go 1.24 and
+nothing else. `go test ./...` needs no browser and no network. The UI tests want
+a Chrome-family browser and run behind a build tag; they launch their own
+headless copy on a throwaway profile and never touch a browser you are signed
+into.
+
+```bash
+gofmt -l . && go vet ./...                            # must be clean
+go test ./...                                         # fast, no browser
+go test -tags uitest ./internal/server/ -run TestUI   # the UI, in headless Chrome
+GOOS=linux go build ./... && GOOS=darwin go build ./...   # it has to cross-compile
+```
+
+**Where things are** is in [Layout](#layout), and the conventions this codebase
+actually holds itself to are in [CLAUDE.md](CLAUDE.md) — worth five minutes
+before a first change, because several of them exist for reasons that are not
+obvious and are documented where they bite.
+
+**The house style, briefly.** Comments explain *why*, especially where the
+obvious approach is wrong; errors say what to do next in plain language; a list
+endpoint returns `[]` and never `null`; nothing is killed, deleted or uploaded
+without being asked. If you fix something that only showed up when the thing was
+run, add it to the list above — that list is the most useful part of this file.
+
+**Good first issues** tend to live in the gaps: the non-Claude providers are
+wired but unexercised, the desktop window is Windows-only (the server and UI are
+not), and Review still lists one repository at a time. Say hello in an issue
+before a large change, so two people do not build the same thing twice.
+
 ## Licence
 
-MIT.
+MIT. See [LICENSE](LICENSE).
