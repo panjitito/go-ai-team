@@ -1,0 +1,91 @@
+# Every check CLAUDE.md asks for, on every push and pull request.
+#
+# Two platforms on purpose. This is developed on Windows and most of the
+# platform-specific code is Windows-only, so a Linux break is invisible until
+# somebody else clones it. That has already happened once: a file named
+# api_windows.go took a pop-out handler out of the build everywhere else, with
+# no build tag and no warning, and the package stopped compiling on Linux and
+# macOS while passing every check on the machine it was written on.
+#
+# Standard GitHub-hosted runners on a public repository, which cost nothing.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        shell: bash
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "these files are not formatted:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: build
+        shell: bash
+        run: go build -o go-ai-team-dev$([ "$RUNNER_OS" = Windows ] && echo .exe) .
+
+      - name: test
+        run: go test ./...
+
+      # The UI smoke test drives headless Chrome on a throwaway profile, which
+      # both runner images already have. UITEST_REQUIRED turns its "no browser
+      # here" and "no binary here" skips into failures: a suite that skips its
+      # only end-to-end check and still reports ok is the worst answer
+      # available.
+      - name: ui smoke test
+        env:
+          UITEST_REQUIRED: "1"
+        run: go test -tags uitest ./internal/server/ -run TestUI -v
+
+  cross:
+    name: cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # macOS has no runner in this workflow, so at least prove it still
+      # compiles. Both architectures, because Apple ships two.
+      - name: darwin
+        run: |
+          GOOS=darwin GOARCH=amd64 go build ./...
+          GOOS=darwin GOARCH=arm64 go build ./...

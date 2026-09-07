@@ -117,7 +117,12 @@ func imageKind(b []byte) (kind, ext string, err error) {
 // attachName builds a safe, unique filename, keeping something recognisable from
 // what the browser called it.
 func attachName(given, ext string) string {
-	base := strings.TrimSuffix(filepath.Base(strings.TrimSpace(given)), filepath.Ext(given))
+	// baseName, not filepath.Base: this name came from a browser and carries
+	// that machine's separators, which are not necessarily this one's.
+	// filepath.Ext is safe once the separators are gone, because there is
+	// nothing left for the two platforms to disagree about.
+	base := baseName(strings.TrimSpace(given))
+	base = strings.TrimSuffix(base, filepath.Ext(base))
 	var keep []rune
 	for _, r := range base {
 		switch {

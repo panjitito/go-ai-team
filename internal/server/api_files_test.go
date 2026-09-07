@@ -3,7 +3,6 @@ package server
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -46,15 +45,19 @@ func TestProjectPathStaysInside(t *testing.T) {
 		}
 	}
 
+	// Every one of these is refused on every platform, which is the point of
+	// the list. filepath is separator-aware, so on Linux it reads `..\secret`
+	// as one oddly-named file and a drive letter as an ordinary directory
+	// name; a check that only holds on the machine it was written on is not a
+	// check. See paths.go.
 	bad := []string{
 		"..", "../secret.txt", "../../etc/passwd",
 		`..\secret.txt`, `..\..\windows\system32`,
 		"sub/../../secret.txt",
 		"sub/deep/../../../secret.txt",
+		`sub\..\..\secret.txt`,
 		"/etc/passwd",
-	}
-	if runtime.GOOS == "windows" {
-		bad = append(bad, `C:\Windows\System32\drivers\etc\hosts`, "C:/Windows")
+		`C:\Windows\System32\drivers\etc\hosts`, "C:/Windows",
 	}
 	for _, rel := range bad {
 		if abs, _, err := resolveInside(root, rel); err == nil {

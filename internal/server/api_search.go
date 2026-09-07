@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -107,7 +106,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	// a folder the app has never been told about still gets a name.
 	projects := map[string]string{}
 	for _, p := range s.st.Projects() {
-		projects[strings.ToLower(filepath.Clean(p.Path))] = p.Name
+		projects[pathKey(p.Path)] = p.Name
 	}
 
 	for _, h := range res.Hits {
@@ -130,12 +129,17 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 //
 // Matched case-insensitively because this is Windows and the same directory
 // arrives spelled both ways.
+//
+// The cwd comes out of a transcript rather than from this process, so it is
+// spelled the way the machine that wrote it spells paths. baseName splits on
+// either separator: filepath.Base on Linux would hand back the whole of
+// `C:\Users\x\Projects\api` as the folder's name.
 func projectLabel(known map[string]string, cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	if n, ok := known[strings.ToLower(filepath.Clean(cwd))]; ok {
+	if n, ok := known[pathKey(cwd)]; ok {
 		return n
 	}
-	return filepath.Base(filepath.Clean(cwd))
+	return baseName(strings.TrimRight(toSlash(cwd), "/"))
 }

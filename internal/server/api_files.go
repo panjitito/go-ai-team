@@ -74,11 +74,19 @@ func resolveInside(dir, rel string) (string, string, error) {
 		return "", "", fmt.Errorf("the project directory is not reachable: %w", err)
 	}
 
-	clean := filepath.Clean(filepath.FromSlash(rel))
+	// Both separators, on every platform. A request carries whatever separator
+	// the machine that sent it uses, and on Linux filepath reads `..\secret` as
+	// one filename rather than as a way out of the directory. See paths.go.
+	clean := filepath.Clean(filepath.FromSlash(toSlash(rel)))
 	if clean == "." || clean == string(filepath.Separator) {
 		clean = ""
 	}
 	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("path must be inside the project")
+	}
+	// A drive letter is absolute on Windows and an ordinary name on Linux, and
+	// a project path is relative on both.
+	if len(clean) >= 2 && clean[1] == ':' {
 		return "", "", fmt.Errorf("path must be inside the project")
 	}
 	abs := filepath.Join(root, clean)

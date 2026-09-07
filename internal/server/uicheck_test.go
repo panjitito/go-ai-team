@@ -22,7 +22,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +32,55 @@ import (
 
 	"github.com/panjitito/go-ai-team/internal/browser"
 )
+
+// skipOrFail skips locally and fails where the test was promised to run.
+//
+// Both preconditions here — a Chrome-family browser, and a built binary — are
+// reasonable to be missing on a developer's machine and never acceptable to be
+// missing in CI. Without this the whole suite reports ok on a runner that has
+// neither, which is the worst answer available: green, and checking nothing.
+// Set UITEST_REQUIRED=1 to demand it really ran.
+func skipOrFail(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("UITEST_REQUIRED") != "" {
+		t.Fatalf("UITEST_REQUIRED is set: "+format, args...)
+	}
+	t.Skipf(format, args...)
+}
+
+// safeBuf collects a child's stderr while the test reads it from another
+// goroutine. os/exec writes into it as output arrives, so an ordinary
+// strings.Builder here is a data race that -race would fail on.
+type safeBuf struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *safeBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *safeBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// devToolsLine is what Chrome prints once its debugging socket is up. It is the
+// second way of learning the port and, in some environments, the only one: see
+// launchChrome.
+var devToolsLine = regexp.MustCompile(`DevTools listening on ws://127\.0\.0\.1:(\d+)/`)
+
+// indent sets a quoted block off from the failure that carries it, and says so
+// when there was nothing to quote.
+func indent(s string) string {
+	if s == "" {
+		return "    (it printed nothing at all)"
+	}
+	return "    " + strings.ReplaceAll(s, "\n", "\n    ")
+}
 
 // chrome is a headless Chrome the test owns end to end.
 type chrome struct {
@@ -48,7 +99,7 @@ func launchChrome(t *testing.T) *chrome {
 	t.Helper()
 	b, ok := browser.Find()
 	if !ok {
-		t.Skip("no Chrome-family browser on this machine")
+		skipOrFail(t, "no Chrome-family browser on this machine")
 	}
 
 	profile := t.TempDir()
@@ -65,14 +116,29 @@ func launchChrome(t *testing.T) *chrome {
 		"--window-size=1440,940",
 		"about:blank",
 	)
+	// Chrome explains itself on stderr and nowhere else. Without this the only
+	// symptom of a browser that cannot start is a thirty-second wait and "never
+	// reported a DevTools port", which names the effect and hides the cause —
+	// a sandbox it is not allowed to create, a profile directory confinement
+	// keeps it out of, a missing shared library. All of those print a line.
+	var stderr safeBuf
+	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("could not start %s: %v", b.Name, err)
+		t.Fatalf("could not start %s (%s): %v", b.Name, b.Path, err)
 	}
 
 	c := &chrome{cmd: cmd, profile: profile}
 	t.Cleanup(c.close)
 
-	// Chrome writes the port it actually chose into the profile directory.
+	// The port, from either of the two places Chrome announces it.
+	//
+	// The documented one is DevToolsActivePort in the profile directory. The
+	// other is a line on stderr, and there are real environments where only the
+	// second arrives: a snap-packaged Chromium is confined and cannot write
+	// into a /tmp profile, so it starts, serves, prints "DevTools listening
+	// on ws://127.0.0.1:42129/" and leaves no file behind. Watching both costs
+	// one regexp and turns "never reported a port" from a dead end into a
+	// working browser.
 	portFile := filepath.Join(profile, "DevToolsActivePort")
 	deadline := time.Now().Add(30 * time.Second)
 	var port string
@@ -87,10 +153,15 @@ func launchChrome(t *testing.T) *chrome {
 				break
 			}
 		}
+		if m := devToolsLine.FindStringSubmatch(stderr.String()); m != nil {
+			port = m[1]
+			break
+		}
 		time.Sleep(150 * time.Millisecond)
 	}
 	if port == "" {
-		t.Fatal("Chrome never reported a DevTools port")
+		t.Fatalf("%s at %s never wrote %s.\nIts own account of why:\n%s",
+			b.Name, b.Path, portFile, indent(strings.TrimSpace(stderr.String())))
 	}
 	c.wsURL = "http://127.0.0.1:" + port
 	return c
@@ -265,7 +336,7 @@ func startServer(t *testing.T, port int) {
 		}
 	}
 	if exe == "" {
-		t.Skip("build the binary first: go build -o go-ai-team-dev.exe .")
+		skipOrFail(t, "build the binary first: go build -o go-ai-team-dev.exe .")
 	}
 	abs, _ := filepath.Abs(exe)
 	cmd := exec.Command(abs, "--port", fmt.Sprint(port), "--browser", "none")
