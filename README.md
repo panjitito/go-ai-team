@@ -465,6 +465,12 @@ that review had not caught. Each keeps its own evidence:
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
+- **A file called `api_windows.go` is a Windows-only file.** Go reads a GOOS
+  name off the end of a filename with no build tag and no warning, so the
+  pop-out handler — meant for every platform — left the server package unable to
+  compile on Linux or macOS. It passed every check on the machine it was written
+  on, which is the whole difficulty. A test now refuses any filename in that
+  package ending in a GOOS or GOARCH.
 - **`Terminate` posts the quit to whichever thread calls it.** The window
   binding's own comment says it is safe from a background thread; it calls
   `PostQuitMessage`, which posts to the *calling* thread's queue, so from a
