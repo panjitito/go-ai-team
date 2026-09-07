@@ -18,7 +18,7 @@ import (
 func TestUIThinkingIndicator(t *testing.T) {
 	port := 7788
 	if _, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/settings", port)); err != nil {
-		t.Skip("no server on 7788; start one first")
+		skipOrFail(t, "no server on 7788; start one first")
 	}
 
 	c := launchChrome(t)

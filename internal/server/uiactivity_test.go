@@ -27,6 +27,14 @@ func TestUIActivity(t *testing.T) {
 	c := launchChrome(t)
 	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
 
+	// Say what motion preference this is testing, rather than inheriting the
+	// machine's. The style sheet deliberately swaps the pulse for a ring under
+	// prefers-reduced-motion, and a Windows CI runner reports "reduce" — so the
+	// motion assertion below failed on a stylesheet doing exactly what it was
+	// written to do. Both branches are now checked, each with the media state it
+	// belongs to.
+	setMotion(t, c, "no-preference")
+
 	if ready := c.evalString(t, `
 new Promise(async resolve => {
   // The functions exist as soon as the script parses, but loadAll() resolves
@@ -190,6 +198,9 @@ new Promise(async resolve => {
 	if r.BusyAnim == "none" || r.BusyAnim == "" {
 		t.Errorf("working does not animate (%q)", r.BusyAnim)
 	}
+	// And for somebody who has asked for no motion, the same state has to stay
+	// tellable apart without any. That branch existed and nothing checked it.
+	checkReducedMotion(t, c)
 	// And a thing wanting a decision should not compete with it.
 	if r.AskingAnim != "none" {
 		t.Errorf("waiting-for-you animates (%q); it is meant to be steady", r.AskingAnim)
@@ -229,5 +240,52 @@ new Promise(async resolve => {
 	// Off together, so the element does not claim a state it is not showing.
 	if strings.Contains(r.NavExpanded, "has-activity") || strings.Contains(r.NavExpanded, "act-") {
 		t.Errorf("the toggle keeps its badge while the panel is open: %q", r.NavExpanded)
+	}
+}
+
+// setMotion pins the page's prefers-reduced-motion, so a test asserts about a
+// stated preference rather than about the machine it happens to run on.
+func setMotion(t *testing.T, c *chrome, value string) {
+	t.Helper()
+	c.call(t, "Emulation.setEmulatedMedia", map[string]any{
+		"features": []map[string]string{{"name": "prefers-reduced-motion", "value": value}},
+	})
+}
+
+// checkReducedMotion asserts the no-motion branch of the activity badge: the
+// pulse is gone and a ring takes its place, because "working" still has to be
+// distinguishable from "idle" at a glance.
+func checkReducedMotion(t *testing.T, c *chrome) {
+	t.Helper()
+	setMotion(t, c, "reduce")
+	defer setMotion(t, c, "no-preference")
+
+	got := c.evalString(t, `
+new Promise(async resolve => {
+  paintActivity();
+  await new Promise(r => setTimeout(r, 60));
+  const n = document.querySelector('.activity.act-working');
+  if (!n) return resolve(JSON.stringify({ missing: true }));
+  const cs = getComputedStyle(n);
+  resolve(JSON.stringify({ anim: cs.animationName, shadow: cs.boxShadow }));
+})`)
+	t.Logf("reduced motion: %s", got)
+
+	var r struct {
+		Missing bool   `json:"missing"`
+		Anim    string `json:"anim"`
+		Shadow  string `json:"shadow"`
+	}
+	if err := json.Unmarshal([]byte(got), &r); err != nil {
+		t.Fatalf("unreadable: %v (%s)", err, got)
+	}
+	if r.Missing {
+		t.Fatal("no working badge on screen to check")
+	}
+	if r.Anim != "none" {
+		t.Errorf("something still animates for somebody who asked for no motion: %q", r.Anim)
+	}
+	if r.Shadow == "" || r.Shadow == "none" {
+		t.Errorf("with the pulse gone there is nothing marking working: box-shadow %q", r.Shadow)
 	}
 }

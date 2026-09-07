@@ -48,7 +48,7 @@ func liveSessionCWD(t *testing.T, port int) string {
 func TestUIMentions(t *testing.T) {
 	port := 7788
 	if _, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/settings", port)); err != nil {
-		t.Skip("no server on 7788; start one first")
+		skipOrFail(t, "no server on 7788; start one first")
 	}
 	// Candidates of its own, so moving through the list is actually exercised.
 	// A staging project may hold one matching file, and arrowing down a list of

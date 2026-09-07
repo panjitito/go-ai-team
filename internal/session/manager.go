@@ -92,6 +92,11 @@ type Session struct {
 	// what we intended; after it, what disk confirms.
 	AccountVerified bool `json:"accountVerified"`
 
+	// Endpoint names the API this session talks to when that is not the
+	// account's own. A bound account stops paying for anything the moment
+	// ANTHROPIC_BASE_URL is set, so the badge alone would be misleading.
+	Endpoint Endpoint `json:"endpoint,omitzero"`
+
 	// SwitchCount records how many times auto-switch rescued this session.
 	SwitchCount int      `json:"switchCount"`
 	SwitchLog   []string `json:"switchLog,omitempty"`
@@ -603,6 +608,7 @@ type PublicSession struct {
 	Error           string              `json:"error,omitempty"`
 	ClaudeSessionID string              `json:"claudeSessionId,omitempty"`
 	AccountVerified bool                `json:"accountVerified"`
+	Endpoint        Endpoint            `json:"endpoint,omitzero"`
 	SwitchCount     int                 `json:"switchCount"`
 	SwitchLog       []string            `json:"switchLog,omitempty"`
 	Tokens          claudefs.TokenStats `json:"tokens"`
@@ -638,8 +644,8 @@ func (s *Session) Public() PublicSession {
 		CWD: s.CWD, Command: s.Command, PID: s.PID, Status: s.Status,
 		StartedAt: s.StartedAt, EndedAt: s.EndedAt, ExitCode: s.ExitCode,
 		Error: s.Error, ClaudeSessionID: s.ClaudeSessionID,
-		AccountVerified: s.AccountVerified,
-		SwitchCount:     s.SwitchCount, SwitchLog: logCopy,
+		AccountVerified: s.AccountVerified, Endpoint: s.Endpoint,
+		SwitchCount: s.SwitchCount, SwitchLog: logCopy,
 		Tokens: s.Tokens, TotalTokens: s.Tokens.Total(),
 		CacheHitRate: s.Tokens.CacheHitRate(), IdleSeconds: idle,
 		NeedsYou: s.needsYou, Question: s.question, Branch: s.Branch,

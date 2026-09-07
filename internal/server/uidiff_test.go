@@ -18,7 +18,7 @@ import (
 func TestUIDiffParser(t *testing.T) {
 	port := 7788
 	if _, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/settings", port)); err != nil {
-		t.Skip("no server on 7788; start one first")
+		skipOrFail(t, "no server on 7788; start one first")
 	}
 	c := launchChrome(t)
 	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
@@ -54,8 +54,13 @@ func TestUIDiffParser(t *testing.T) {
     p.left ? p.left.kind : null, p.right ? p.right.kind : null,
   ]);
 
-  // The changed fragment inside an edited line.
-  const parts = inlineParts('log.Println("old")', 'log.Println("new")');
+  // The changed fragment inside an edited line. The middle always comes from
+  // the first argument, the line being drawn — the bug this replaced returned
+  // both middles and let the caller pick, and the caller picked the other one
+  // for an added line, so the "after" column of a split diff showed the word
+  // from "before".
+  const drawn = inlineParts('log.Println("new")', 'log.Println("old")');
+  const otherWay = inlineParts('log.Println("old")', 'log.Println("new")');
 
   return JSON.stringify({
     files: files.length,
@@ -64,7 +69,8 @@ func TestUIDiffParser(t *testing.T) {
     rows,
     pairs,
     h2first: [h2.rows[0].kind, h2.rows[0].oldNo ?? null],
-    inline: [parts.pre, parts.aMid, parts.bMid, parts.post],
+    inline: [drawn.pre, drawn.mid, drawn.post],
+    inlineOtherWay: otherWay.mid,
     // Metadata lines must not become content.
     hasIndexLine: JSON.stringify(files).includes('index 1111111'),
   });
@@ -72,14 +78,15 @@ func TestUIDiffParser(t *testing.T) {
 	t.Logf("diff parse: %s", got)
 
 	var r struct {
-		Files        int             `json:"files"`
-		Hunks        int             `json:"hunks"`
-		Label        string          `json:"label"`
-		Rows         [][]interface{} `json:"rows"`
-		Pairs        [][]interface{} `json:"pairs"`
-		H2First      []interface{}   `json:"h2first"`
-		Inline       []string        `json:"inline"`
-		HasIndexLine bool            `json:"hasIndexLine"`
+		Files          int             `json:"files"`
+		Hunks          int             `json:"hunks"`
+		Label          string          `json:"label"`
+		Rows           [][]interface{} `json:"rows"`
+		Pairs          [][]interface{} `json:"pairs"`
+		H2First        []interface{}   `json:"h2first"`
+		Inline         []string        `json:"inline"`
+		InlineOtherWay string          `json:"inlineOtherWay"`
+		HasIndexLine   bool            `json:"hasIndexLine"`
 	}
 	if err := json.Unmarshal([]byte(got), &r); err != nil {
 		t.Fatalf("unreadable: %v", err)
@@ -135,7 +142,15 @@ func TestUIDiffParser(t *testing.T) {
 	}
 
 	// Only "old"/"new" differ; the rest of the line is common.
-	if len(r.Inline) != 4 || r.Inline[1] != "old" || r.Inline[2] != "new" {
+	if len(r.Inline) != 3 || r.Inline[1] != "new" {
 		t.Errorf("inline parts = %q, want the changed word isolated", r.Inline)
+	}
+	if r.Inline[0] != `log.Println("` || r.Inline[2] != `")` {
+		t.Errorf("the common parts are wrong: %q", r.Inline)
+	}
+	// And the direction: whichever line is being drawn is the one the fragment
+	// is taken from.
+	if r.InlineOtherWay != "old" {
+		t.Errorf("marked %q on the other side, want the fragment from the line being drawn", r.InlineOtherWay)
 	}
 }

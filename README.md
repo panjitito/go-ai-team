@@ -7,7 +7,8 @@ of what they are all doing, their conversations rendered properly instead of
 scraped off a terminal, permission prompts you can answer with a button, and a
 search that covers every transcript on your disk.
 
-[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.27%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![CI](https://github.com/panjitito/go-ai-team/actions/workflows/ci.yml/badge.svg)](https://github.com/panjitito/go-ai-team/actions/workflows/ci.yml)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/desktop-Windows-0078D4?logo=windows&logoColor=white)](#install)
 [![Phone](https://img.shields.io/badge/phone-same%20URL-8b5cf6)](#from-your-phone)
@@ -129,6 +130,7 @@ charges by the month for a few hundred of them.
 | **Honest sign-in state** | Distinguishes signed in from signed out from never signed in. See below: the obvious check is wrong. |
 | **Auto-switch** | At a usage limit: bench the account, copy the transcript into another one, resume the same session there, tell the agent to continue. |
 | **Shared user layer** | Links your own commands, skills, subagents, `CLAUDE.md`, hooks and plugins into every account. Credentials stay isolated. |
+| **Bring your own key** | Point one agent at DeepSeek, GLM, Kimi, OpenRouter or a gateway you run, while the one beside it stays on your subscription. The key lives in the vault; the agent stores its name. [Below](#bring-your-own-key). |
 
 ### Running agents
 | | |
@@ -207,10 +209,17 @@ charges by the month for a few hundred of them.
 
 ## Install
 
-Needs Go 1.22+ to build, and Claude Code on your `PATH` to run.
+Needs Go 1.27+ to build, and Claude Code on your `PATH` to run.
 
 ```bash
-git clone <this repo> && cd go-ai-team
+go install github.com/panjitito/go-ai-team@latest
+go-ai-team
+```
+
+Or from a clone, which is what you want if you intend to change anything:
+
+```bash
+git clone https://github.com/panjitito/go-ai-team && cd go-ai-team
 go build -o go-ai-team.exe .     # or: go build -o go-ai-team .
 ./go-ai-team.exe
 ```
@@ -405,6 +414,44 @@ So every spawn starts from a filtered environment. The filter is a precise
 deny-list plus two narrow patterns (`*_SESSION_ID`, `*_MESSAGING_*`) rather than
 the whole `CLAUDE_CODE_` prefix, because legitimate settings like
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` live under that prefix too.
+
+## Bring your own key
+
+Claude Code goes wherever `ANTHROPIC_BASE_URL` points, and several providers
+serve Anthropic's Messages API so it can point at them. One agent can run on
+DeepSeek while the one beside it runs on your subscription.
+
+Open an agent and pick an endpoint. The form fills in the base URL and whatever
+else that provider's own instructions call for, and every field stays editable,
+because these details change:
+
+| | |
+|---|---|
+| **DeepSeek** | `https://api.deepseek.com/anthropic`, with the model mapping their docs give. |
+| **Z.AI (GLM)** | `https://api.z.ai/api/anthropic`, plus the long request timeout they ask for. |
+| **Moonshot (Kimi)** | `https://api.moonshot.ai/anthropic`. Not the `.cn` host: that is the mainland platform and keys are not interchangeable. |
+| **OpenRouter** | `https://openrouter.ai/api`, and `ANTHROPIC_API_KEY` set to empty on purpose. A non-empty one takes precedence over the bearer token and the requests go out unauthenticated. |
+| **A gateway you run** | LiteLLM or similar, for anything with no Anthropic API of its own. Google publishes none for Gemini, so a gateway is the way to reach it. |
+| **Something else** | Type the URL in. |
+
+The key is never typed into the agent. It goes in the vault, and the agent
+stores `{{secret:NAME}}`, which is resolved in the server process on the way
+into the child. Nothing in the browser has ever seen the value, and no endpoint
+returns one.
+
+An agent pointed elsewhere is **billed elsewhere**, so the endpoint's host is
+shown next to the account badge on the card and in the chat header. Without that
+the badge names an account that is not paying for anything. The same badge
+appears, marked, when `ANTHROPIC_BASE_URL` was inherited from the shell Go AI
+Team was started in rather than set on the agent. Inheritance still works, since
+a company routing everything through one gateway exported it deliberately, but
+it is no longer invisible.
+
+`scratchpad/byok_check.py` runs the whole path against the real app with a
+stand-in for the CLI that prints the environment it was handed. It needs no key,
+no account and no quota, and it answers the question the feature turns on: the
+child gets the value from the vault, not the twenty-six characters of
+`{{secret:NAME}}`.
 
 ## Auto-switch
 

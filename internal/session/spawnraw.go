@@ -100,6 +100,10 @@ func (m *Manager) spawnRaw(o spawnRawOpts) (*Session, error) {
 	cmd.Dir = o.CWD
 
 	env := cleanEnv(os.Environ(), provider)
+	// Where this session's requests will actually go, worked out before the
+	// agent's own variables are appended so the two sources stay distinguishable.
+	// Display only, and never the key: see endpoint.go.
+	s.Endpoint = endpointOf(o.Env, env)
 	if o.AccountDir != "" {
 		env = append(env, provider.EnvVar()+"="+o.AccountDir)
 	}

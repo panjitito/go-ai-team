@@ -621,6 +621,10 @@ function agentCard(a) {
             el('span', { class: 'dot ' + status }), status),
       el('span', { class: 'pill', title: `account resolved from: ${res.source || 'n/a'}` },
         el('span', { class: 'acct-dot', style: `background:${effColor}` }), effName),
+      // The account badge above names who the agent is signed in as. When
+      // ANTHROPIC_BASE_URL is set, that account is not paying for anything, so
+      // the endpoint has to sit next to it or the card is misleading.
+      endpointBadge(sess),
       sess && sess.branch
         ? el('span', { class: 'pill', title: 'Running in its own worktree on this branch' },
             '⎇ ' + sess.branch)
@@ -950,8 +954,10 @@ function editFolder(f) {
 
 // ---------------------------------------------------------------- agents
 
-function agentForm(a, project) {
+async function agentForm(a, project) {
   const claude = S.accounts.filter(x => x.provider === 'claude');
+  const catalogue = await endpointCatalog();
+  const vault = await vaultNames();
   return el('div', {},
     el('label', { text: 'Name' }),
     el('input', { type: 'text', id: 'aName', value: a ? a.name : '', placeholder: 'Backend Dev' }),
@@ -978,13 +984,21 @@ function agentForm(a, project) {
       'Give this agent a git worktree of its own'),
     el('div', { class: 'hint', text: 'Its own checkout on its own branch, off the same history. Several agents in one repository otherwise edit the same files, and one’s half-finished change becomes another’s starting point. Merge the branch when you are happy with it. Ignored where the project is not a git repository.' }),
 
+    endpointFields(a, catalogue, vault),
+
     el('label', { text: 'Extra CLI flags' }),
     el('input', { type: 'text', id: 'aArgs', value: a ? (a.extraArgs || '') : '',
       placeholder: '--model opus-4.8  --append-system-prompt "be terse"' }),
     el('div', { class: 'hint', text: 'Passed straight to the CLI at launch. Use this to pin a model the picker does not list.' }));
 }
 
+// readAgentForm returns the agent, or {error} when the endpoint block is not
+// filled in. env is always sent: it is what carries the endpoint, and a PATCH
+// that omitted it would leave a provider set on an agent the form says is on
+// Anthropic.
 function readAgentForm() {
+  const env = readEndpointFields(EP || []);
+  if (env && env.error) return { error: env.error };
   return {
     name: $('#aName').value.trim(),
     role: $('#aRole').value,
@@ -992,14 +1006,16 @@ function readAgentForm() {
     accountId: $('#aAcct').value,
     extraArgs: $('#aArgs').value.trim(),
     worktree: $('#aWorktree').checked,
+    env: env || {},
   };
 }
 
-function newAgent(project) {
-  modal('New agent', agentForm(null, project), [
+async function newAgent(project) {
+  modal('New agent', await agentForm(null, project), [
     ['Cancel', 'btn', closeModal],
     ['Create', 'btn primary', async () => {
       const f = readAgentForm();
+      if (f.error) return toast(f.error, 'bad');
       if (!f.name) return toast('Give the agent a name', 'bad');
       const role = ROLES.find(r => r[0] === f.role);
       closeModal();
@@ -1012,9 +1028,9 @@ function newAgent(project) {
   ]);
 }
 
-function editAgent(a) {
+async function editAgent(a) {
   const sess = liveSession(a.id);
-  const body = el('div', {}, agentForm(a, projectById(a.projectId)));
+  const body = el('div', {}, await agentForm(a, projectById(a.projectId)));
   if (sess) {
     body.prepend(el('div', { class: 'pill warn', style: 'margin-bottom:12px' },
       'This agent is running. An account change applies the next time it starts.'));
@@ -1028,6 +1044,7 @@ function editAgent(a) {
     }],
     ['Save', 'btn primary', async () => {
       const f = readAgentForm();
+      if (f.error) return toast(f.error, 'bad');
       if (!f.name) return toast('Give the agent a name', 'bad');
       closeModal();
       await tryApi(`/agents/${a.id}`, { method: 'PATCH', body: f });

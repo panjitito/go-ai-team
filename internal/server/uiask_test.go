@@ -23,7 +23,7 @@ import (
 func TestUIAskLive(t *testing.T) {
 	port := 7788
 	if _, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/settings", port)); err != nil {
-		t.Skip("no server on 7788; start one first")
+		skipOrFail(t, "no server on 7788; start one first")
 	}
 	c := launchChrome(t)
 	c.openTarget(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
@@ -103,6 +103,30 @@ new Promise(async resolve => {
 
 	t.Logf("live ask: %s", got)
 
+	var r struct {
+		Error          string   `json:"error"`
+		CWD            string   `json:"cwd"`
+		Question       string   `json:"question"`
+		Options        []string `json:"options"`
+		Status         string   `json:"status"`
+		ThinkingHidden bool     `json:"thinkingHidden"`
+		BannerGone     bool     `json:"bannerGone"`
+		MsgsDrawn      int      `json:"msgsDrawn"`
+		JSErrors       string   `json:"jsErrors"`
+		ToolCardShown  bool     `json:"toolCardShown"`
+	}
+	if err := json.Unmarshal([]byte(got), &r); err != nil {
+		t.Fatalf("unreadable: %v", err)
+	}
+	// Read before anything else is asserted. This needs a real agent on a
+	// signed-in account, which a scratch server started by the suite does not
+	// have — and complaining that the ask panel had gone before the click, when
+	// there was never a session to ask anything, sends the reader looking at the
+	// panel code.
+	if r.Error != "" {
+		t.Skipf("%s (this one needs a live agent on a signed-in account)", r.Error)
+	}
+
 	if dir := os.Getenv("UISHOT_DIR"); dir != "" {
 		res := c.call(t, "Page.captureScreenshot", map[string]any{"format": "png"})
 		if data, _ := res["data"].(string); data != "" {
@@ -126,25 +150,6 @@ new Promise(async resolve => {
 })`)
 	if cleared != "cleared" {
 		t.Errorf("after answering: %s — a second click would send a stray digit", cleared)
-	}
-
-	var r struct {
-		Error          string   `json:"error"`
-		CWD            string   `json:"cwd"`
-		Question       string   `json:"question"`
-		Options        []string `json:"options"`
-		Status         string   `json:"status"`
-		ThinkingHidden bool     `json:"thinkingHidden"`
-		BannerGone     bool     `json:"bannerGone"`
-		MsgsDrawn      int      `json:"msgsDrawn"`
-		JSErrors       string   `json:"jsErrors"`
-		ToolCardShown  bool     `json:"toolCardShown"`
-	}
-	if err := json.Unmarshal([]byte(got), &r); err != nil {
-		t.Fatalf("unreadable: %v", err)
-	}
-	if r.Error != "" {
-		t.Skipf("%s", r.Error)
 	}
 
 	if !strings.Contains(r.Question, name) {

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/panjitito/go-ai-team/internal/catalog"
 	"github.com/panjitito/go-ai-team/internal/claudefs"
 	"github.com/panjitito/go-ai-team/internal/gitx"
 	"github.com/panjitito/go-ai-team/internal/session"
@@ -32,6 +33,8 @@ func (s *Server) routeMisc(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/git/message", s.gitMessage)
 	mux.HandleFunc("POST /api/git/init", s.gitInit)
 	mux.HandleFunc("POST /api/git/branch", s.gitBranch)
+
+	mux.HandleFunc("GET /api/endpoints", s.listEndpoints)
 
 	mux.HandleFunc("GET /api/roles", s.listRoles)
 	mux.HandleFunc("POST /api/roles/import", s.importRole)
@@ -589,6 +592,13 @@ func (s *Server) gitBranch(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, orEmpty(s.cat.All()))
+}
+
+// listEndpoints returns the Anthropic-compatible APIs an agent can be pointed
+// at. Static reference data, no credential anywhere near it: see
+// internal/catalog/endpoints.go.
+func (s *Server) listEndpoints(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, orEmpty(catalog.Endpoints))
 }
 
 func (s *Server) importRole(w http.ResponseWriter, r *http.Request) {

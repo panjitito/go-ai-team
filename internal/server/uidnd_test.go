@@ -17,7 +17,7 @@ func TestUIDragIntoFolder(t *testing.T) {
 	port := 7788
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	if _, err := http.Get(base + "/api/settings"); err != nil {
-		t.Skip("no server on 7788; start one first")
+		skipOrFail(t, "no server on 7788; start one first")
 	}
 
 	c := launchChrome(t)

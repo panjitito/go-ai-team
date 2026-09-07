@@ -152,6 +152,7 @@ function chatHeader(sess, title) {
     el('span', { class: 'pill', title: sess.accountDir || '' },
       el('span', { class: 'acct-dot', style: `background:${sess.accountColor || '#3a4250'}` }),
       sess.accountName || 'system default'),
+    endpointBadge(sess),
     el('span', { style: 'flex:1' }),
 
     el('span', {

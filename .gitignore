@@ -13,5 +13,9 @@
 # Two of these were committed by accident and cost 62 MB of history to remove.
 /*.exe~
 
+# the stand-in CLI scratchpad/byok_check.py builds
+/scratchpad/envdump/envdump
+/scratchpad/envdump/envdump.exe
+
 # local state (never commit: it lists account directories)
 /.goaiteam/
