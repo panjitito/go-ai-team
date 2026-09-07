@@ -34,10 +34,15 @@ import urllib.request
 
 PORT = int(os.environ.get("PORT", "7894"))
 BASE = f"http://127.0.0.1:{PORT}/api"
-EXE = r"C:\Users\TITO\Documents\Projects\go-ai-team\go-ai-team.exe"
-# .claude is logged out; .claude-uniair is the directory this session is itself
-# running in, so this uses the third one.
-ACCOUNT_DIR = os.environ.get("ACCOUNT_DIR", r"C:\Users\TITO\.claude-ep")
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXE = os.environ.get("EXE", os.path.join(HERE, "go-ai-team.exe"))
+# A real signed-in config directory. Point ACCOUNT_DIR at one of yours: this
+# starts an agent there and it will spend that account's quota. Do not use the
+# directory a Claude Code session is itself running in, or the two processes
+# write the same credentials file.
+ACCOUNT_DIR = os.environ.get(
+    "ACCOUNT_DIR", os.path.join(os.path.expanduser("~"), ".claude")
+)
 
 ok = []
 bad = []
