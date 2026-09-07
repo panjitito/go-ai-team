@@ -113,9 +113,9 @@ new Promise(async resolve => {
 
     // --- a file the agent wrote outside the project -----------------------
     const away = {
-      rel: 'C:\\Users\\TITO\\.claude-uniair\\projects\\x\\memory\\arena-deathmatch-wip.md',
+      rel: 'C:\\Users\\dev\\.claude-work\\projects\\x\\memory\\arena-deathmatch-wip.md',
       name: 'arena-deathmatch-wip.md',
-      path: 'C:\\Users\\TITO\\.claude-uniair\\projects\\x\\memory\\arena-deathmatch-wip.md',
+      path: 'C:\\Users\\dev\\.claude-work\\projects\\x\\memory\\arena-deathmatch-wip.md',
     };
     out.knowsOutside = outsideProject(away.rel);
     out.knowsInside = outsideProject('app/Http/Kernel.php');

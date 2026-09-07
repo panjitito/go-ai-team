@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/gitx"
+	"github.com/panjitito/go-ai-team/internal/gitx"
 )
 
 // Finding a file by typing a few letters of its name.

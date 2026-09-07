@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/secrets"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/secrets"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // An agent's `{{secret:NAME}}` references have to be resolved before it starts.

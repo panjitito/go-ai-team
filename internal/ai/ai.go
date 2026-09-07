@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // ErrNoAccount is returned when nothing usable is signed in.

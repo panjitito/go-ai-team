@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // A project with no repository must not look like a file that did not change.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 func newTestStore(t *testing.T) *store.Store {

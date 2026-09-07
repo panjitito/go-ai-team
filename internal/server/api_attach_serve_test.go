@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
 )
 
 // The two path segments this route accepts come straight off the URL and are

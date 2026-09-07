@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Builtin is the core team: the roles a software project actually needs, each

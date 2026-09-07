@@ -19,9 +19,9 @@ import (
 
 	"github.com/aymanbagabas/go-pty"
 
-	"github.com/uniair/go-ai-team/internal/accounts"
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/accounts"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Status is an agent's live state, the thing the coloured dot reads from.

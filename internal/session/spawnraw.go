@@ -9,7 +9,7 @@ import (
 
 	"github.com/aymanbagabas/go-pty"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // spawnRaw is the shared machinery behind every PTY this app opens: agents,

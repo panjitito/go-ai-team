@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // This is the exact environment Go AI Team sees when it is launched from a

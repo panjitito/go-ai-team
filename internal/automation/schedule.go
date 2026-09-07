@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Launcher is what actually starts an agent. Supplied by the caller so this

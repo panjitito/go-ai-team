@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Auto-switch: when the account an agent runs on is out of quota, hand the same

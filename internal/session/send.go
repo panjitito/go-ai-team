@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Sending a prompt into a CLI that may not be listening yet.

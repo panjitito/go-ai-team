@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/browser"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/browser"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 func windowServer(t *testing.T) (*Server, *store.Project) {

@@ -1,4 +1,4 @@
-module github.com/uniair/go-ai-team
+module github.com/panjitito/go-ai-team
 
 go 1.27.0
 

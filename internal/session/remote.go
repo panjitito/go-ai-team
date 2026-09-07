@@ -3,7 +3,7 @@ package session
 import (
 	"fmt"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // KindRemote is a terminal on another machine over SSH.

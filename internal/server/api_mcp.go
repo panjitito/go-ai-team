@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
 )
 
 // MCP servers, per account.

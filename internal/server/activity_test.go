@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uniair/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/session"
 )
 
 // The events that are worth a line, and the ones that would drown it.

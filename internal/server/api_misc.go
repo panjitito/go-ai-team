@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/gitx"
-	"github.com/uniair/go-ai-team/internal/session"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/gitx"
+	"github.com/panjitito/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Review, catalogue, layout, messaging and the AI helpers.

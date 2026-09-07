@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // searchHit is one match, dressed for the UI: the account and agent named

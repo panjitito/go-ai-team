@@ -3,7 +3,7 @@ package session
 import (
 	"strings"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Environment hygiene for spawned agents.

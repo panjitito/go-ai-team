@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uniair/go-ai-team/internal/gitx"
+	"github.com/panjitito/go-ai-team/internal/gitx"
 )
 
 // Reading and editing the files an agent is working on.

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/automation"
-	"github.com/uniair/go-ai-team/internal/guard"
-	"github.com/uniair/go-ai-team/internal/secrets"
-	"github.com/uniair/go-ai-team/internal/session"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/automation"
+	"github.com/panjitito/go-ai-team/internal/guard"
+	"github.com/panjitito/go-ai-team/internal/secrets"
+	"github.com/panjitito/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Dev commands, secrets, databases, SSH, schedules, webhooks and the process

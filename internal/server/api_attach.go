@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/session"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Pasting an image into the chat.

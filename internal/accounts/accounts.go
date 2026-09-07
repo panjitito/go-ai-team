@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Palette is the default set of account colours. The colour is what makes
@@ -308,12 +308,23 @@ func (m *Manager) Discover() []Discovered {
 		}
 	}
 	// A common hand-rolled convention: ~/.claude-work, ~/.claude-personal.
+	//
+	// One sibling is skipped: the directory this process was itself started
+	// with. When Go AI Team is launched from a Claude Code session, offering
+	// that session's own config as a managed account invites the two to write
+	// the same credentials file from different processes.
+	self := strings.ToLower(filepath.Clean(os.Getenv(store.ProviderClaude.EnvVar())))
 	if entries, err := os.ReadDir(home); err == nil {
 		for _, e := range entries {
 			n := e.Name()
-			if e.IsDir() && strings.HasPrefix(n, ".claude-") && n != ".claude-uniair" {
-				add(strings.TrimPrefix(n, "."), filepath.Join(home, n), store.ProviderClaude, "sibling directory")
+			if !e.IsDir() || !strings.HasPrefix(n, ".claude-") {
+				continue
 			}
+			dir := filepath.Join(home, n)
+			if self != "." && strings.ToLower(filepath.Clean(dir)) == self {
+				continue
+			}
+			add(strings.TrimPrefix(n, "."), dir, store.ProviderClaude, "sibling directory")
 		}
 	}
 	return out

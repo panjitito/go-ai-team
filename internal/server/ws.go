@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/uniair/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/session"
 )
 
 // lookPath is indirected so tests can stub it.

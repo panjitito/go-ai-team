@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 func at(s string) time.Time {

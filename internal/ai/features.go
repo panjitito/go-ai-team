@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Each function here is one metered feature in the tool we are competing with,

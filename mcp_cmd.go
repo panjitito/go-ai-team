@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/uniair/go-ai-team/internal/dbx"
-	"github.com/uniair/go-ai-team/internal/mcp"
-	"github.com/uniair/go-ai-team/internal/secrets"
-	"github.com/uniair/go-ai-team/internal/session"
-	"github.com/uniair/go-ai-team/internal/sshx"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/dbx"
+	"github.com/panjitito/go-ai-team/internal/mcp"
+	"github.com/panjitito/go-ai-team/internal/secrets"
+	"github.com/panjitito/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/sshx"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // runMCP serves the app's own tools to the agent that spawned this process.

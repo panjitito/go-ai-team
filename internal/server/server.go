@@ -25,17 +25,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/accounts"
-	"github.com/uniair/go-ai-team/internal/ai"
-	"github.com/uniair/go-ai-team/internal/automation"
-	"github.com/uniair/go-ai-team/internal/browser"
-	"github.com/uniair/go-ai-team/internal/catalog"
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/dbx"
-	"github.com/uniair/go-ai-team/internal/secrets"
-	"github.com/uniair/go-ai-team/internal/session"
-	"github.com/uniair/go-ai-team/internal/sshx"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/accounts"
+	"github.com/panjitito/go-ai-team/internal/ai"
+	"github.com/panjitito/go-ai-team/internal/automation"
+	"github.com/panjitito/go-ai-team/internal/browser"
+	"github.com/panjitito/go-ai-team/internal/catalog"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/dbx"
+	"github.com/panjitito/go-ai-team/internal/secrets"
+	"github.com/panjitito/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/sshx"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 //go:embed all:web

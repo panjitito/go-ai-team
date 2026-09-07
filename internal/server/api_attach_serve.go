@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uniair/go-ai-team/internal/claudefs"
-	"github.com/uniair/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/claudefs"
+	"github.com/panjitito/go-ai-team/internal/session"
 )
 
 // Showing a pasted image back.

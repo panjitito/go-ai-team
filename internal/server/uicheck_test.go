@@ -28,7 +28,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/uniair/go-ai-team/internal/browser"
+	"github.com/panjitito/go-ai-team/internal/browser"
 )
 
 // chrome is a headless Chrome the test owns end to end.

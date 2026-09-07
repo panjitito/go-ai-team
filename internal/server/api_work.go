@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/mcp"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/mcp"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Board, ideas, prompts, skills and memory: the work-intake half of the app.

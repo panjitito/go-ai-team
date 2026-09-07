@@ -9,6 +9,9 @@
 /go-ai-team-dev
 /go-ai-team-dev.exe
 
+# what the linker leaves behind when it cannot replace a locked executable.
+# Two of these were committed by accident and cost 62 MB of history to remove.
+/*.exe~
+
 # local state (never commit: it lists account directories)
 /.goaiteam/
-/go-ai-team.exe~

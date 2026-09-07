@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/uniair/go-ai-team/internal/browser"
-	"github.com/uniair/go-ai-team/internal/desktop"
+	"github.com/panjitito/go-ai-team/internal/browser"
+	"github.com/panjitito/go-ai-team/internal/desktop"
 )
 
 /* Opening an agent, or a project, in a window of its own.

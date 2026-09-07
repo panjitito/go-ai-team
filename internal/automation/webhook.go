@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Webhook triggers.

@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uniair/go-ai-team/internal/gitx"
-	"github.com/uniair/go-ai-team/internal/store"
+	"github.com/panjitito/go-ai-team/internal/gitx"
+	"github.com/panjitito/go-ai-team/internal/store"
 )
 
 // Giving an agent a checkout of its own.

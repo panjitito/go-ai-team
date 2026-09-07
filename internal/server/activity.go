@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uniair/go-ai-team/internal/session"
+	"github.com/panjitito/go-ai-team/internal/session"
 )
 
 /* What happened while you were not looking.
