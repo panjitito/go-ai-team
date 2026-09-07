@@ -2,18 +2,20 @@
 
 **Run every Claude Code account you own, side by side, in one window.**
 
-A cockpit for people who keep more than one agent working at once: a board of
-who is doing what, the conversation rendered rather than scraped, permission
-prompts as buttons, and a search across every transcript on your disk.
+If you keep two or three agents working at the same time, this gives you a board
+of what they are all doing, their conversations rendered properly instead of
+scraped off a terminal, permission prompts you can answer with a button, and a
+search that covers every transcript on your disk.
 
 [![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/desktop-Windows-0078D4?logo=windows&logoColor=white)](#install)
 [![Phone](https://img.shields.io/badge/phone-same%20URL-8b5cf6)](#from-your-phone)
 
-**One binary.** No Electron, no `npm install`, no subscription, no API key. It
-never proxies Anthropic and never sees a credential — it decides which
-directory a process starts in, and reads the files the CLI already wrote.
+One binary, about 16 MB. There is no Electron, no `npm install`, and no API key
+to add. The app never proxies Anthropic and never handles a credential. It picks
+which directory each process starts in, then reads the files the CLI writes
+there anyway.
 
 ![The agent board](docs/img/grid.png)
 
@@ -28,8 +30,8 @@ go build -o go-ai-team.exe .
 ./go-ai-team.exe
 ```
 
-A window opens. Add an account (or point at the `~/.claude` you already have),
-add a project, add an agent, press start. Nothing else to configure.
+A window opens. Add an account, or point it at the `~/.claude` you already have.
+Add a project, add an agent, press start. There is nothing else to configure.
 
 ```
 go-ai-team.exe
@@ -53,55 +55,54 @@ go-ai-team.exe mcp --project <id>
 
 ![A conversation, with a tool call opened out](docs/img/conversation.png)
 
-Rendered from the transcript the CLI writes, so a tool call is a diff and not a
-wall of escaped newlines. The plan the agent is working through sits above the
-composer — *2/5 · Write the migration and back-fill* — and the files it has
-touched sit down the right, newest first, with a mark for the ones it created.
-The terminal is one toggle away when you want it.
+This is drawn from the transcript the CLI writes to disk, so a tool call arrives
+as a real diff instead of a screenful of escaped newlines. The plan the agent is
+working through sits above the composer, *2/5 · Write the migration and
+back-fill*. Files it has touched stack up on the right, newest first, with a mark
+on the ones it created. If you want the actual terminal it is one toggle away.
 
-### Go to anything — <kbd>Ctrl</kbd> <kbd>K</kbd>
+### Go to anything (<kbd>Ctrl</kbd> <kbd>K</kbd>)
 
 ![The go-to palette](docs/img/palette.png)
 
-Every agent, project, panel and view, filtered as you type. Agents first and
-carrying their state, because *which one wanted me* is the question being asked
-most of the time: one waiting on an answer sorts above one that is working,
-which sorts above one that is idle. Matching is a subsequence, so `bkw` finds
+Every agent, project, panel and view, filtered as you type. Agents come first and
+carry their state, since most of the time the question is which one wants
+something. One waiting on an answer sorts above one that is working, and both
+sort above one sitting idle. Matching is a subsequence, so `bkw` finds
 **Backend worker**.
 
-### Search everything the agents ever said — <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd>
+### Search everything the agents ever said (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd>)
 
 ![Searching every transcript](docs/img/search.png)
 
-Every message, every tool call, every result, across every account. 2.4 GB and
-1,127 transcripts on the machine this was built on, read in 2.7 seconds — the
-scan is a raw substring match over the bytes, and JSON is parsed only for the
-lines that already matched. The footer says how much it actually read, because
-*nothing found* and *nothing found in the part I had time for* are different
-answers.
+Every message, every tool call, every result, across every account. On the
+machine this was built on that comes to 2.4 GB and 1,127 transcripts, and it
+comes back in 2.7 seconds. The scan is a raw substring match over the bytes;
+JSON only gets parsed for lines that already matched. The footer tells you how
+much it managed to read, so you can tell an empty result from an unfinished one.
 
 ### What happened while you were out
 
 ![The activity log](docs/img/activity.png)
 
-Agents run for hours and you do not. The log is kept by the server rather than
-the page, so it covers the night nobody had it open: which agent asked
-something at 09:41, which account ran out of quota at 23:57 and handed its work
-to another, and which session died at 02:14 and how.
+Agents keep working after you have gone to bed. The server keeps this log rather
+than the page, so it covers the hours nobody had the app open: an agent asking
+something at 09:41, an account running out of quota at 23:57 and handing its work
+to another, a session dying at 02:14.
 
 ---
 
 ## Why this exists
 
-Claude Code supports multiple accounts through one documented mechanism: the
+Claude Code supports multiple accounts through one documented mechanism, the
 `CLAUDE_CONFIG_DIR` environment variable. Point it at a different directory and
-you get a different account — its own credentials, sessions, transcripts and
+you get a different account, with its own credentials, sessions, transcripts and
 quota.
 
 Doing that by hand is miserable, and the tool that does it for you charges
-€7.99/month for the privilege. So this does it declaratively instead: pin an
-account to a project, override it on a single agent, and every terminal is bound
-correctly without you thinking about it.
+€7.99 a month. This does it declaratively instead. Pin an account to a project,
+override it on a single agent, and every terminal ends up bound correctly
+without you thinking about it.
 
 **Nothing here proxies the Anthropic API and no credential passes through this
 program.** It decides which directory a process starts in, and reads the files
@@ -110,8 +111,8 @@ the CLI already wrote to your disk.
 **Every "AI feature" runs on the subscription you already pay for.** Commit
 messages, agent suggestions, feedback clustering, ticket scoping, model routing
 and read-aloud summaries all shell out to your own signed-in CLI in headless
-mode. There is no metered allowance and no API key to add — which is the whole
-point, since the alternative charges per month for a few hundred of them.
+mode. Nothing is metered here and there is no key to add. The paid alternative
+charges by the month for a few hundred of them.
 
 ## What it does
 
@@ -120,12 +121,12 @@ point, since the alternative charges per month for a few hundred of them.
 |---|---|
 | **Unlimited accounts** | An account is a config directory. Add as many as you like. |
 | **In-app sign-in** | Opens a real terminal bound to the new profile; you type `/login`, OAuth happens in your browser, and the badge flips the instant credentials land on disk. |
-| **Attach what you have** | Point at `~/.claude`, a CCS profile, or any directory with credentials — reused as-is, no re-login. |
+| **Attach what you have** | Point at `~/.claude`, a CCS profile, or any directory with credentials. It is reused as-is, with no re-login. |
 | **Discovery** | Scans for provider defaults, CCS instances and `~/.claude-*` siblings. |
 | **The cascade** | `agent override → project pin → nearest folder that pins one → global default → ~/.claude`. Unit-tested in every direction, including folder cycles and dangling references. |
-| **Drag to organise** | Drag a project onto a folder to file it, or onto the drop zone to take it back out; folders nest the same way. A folder cannot be dropped inside itself or its own descendants — that would leave the subtree alive, still pinned to accounts, and unreachable — and the server refuses it too, not just the sidebar. |
+| **Drag to organise** | Drag a project onto a folder to file it, or onto the drop zone to take it back out; folders nest the same way. A folder cannot be dropped inside itself or its own descendants, which would leave the subtree alive, still pinned to accounts, and unreachable. The server refuses it too, not just the sidebar. |
 | **Verified binding** | Once the CLI writes its own session file, the badge shows the account it *actually* used, not the one we intended. |
-| **Honest sign-in state** | Distinguishes signed in from signed out from never signed in — see below, because the obvious check is wrong. |
+| **Honest sign-in state** | Distinguishes signed in from signed out from never signed in. See below: the obvious check is wrong. |
 | **Auto-switch** | At a usage limit: bench the account, copy the transcript into another one, resume the same session there, tell the agent to continue. |
 | **Shared user layer** | Links your own commands, skills, subagents, `CLAUDE.md`, hooks and plugins into every account. Credentials stay isolated. |
 
@@ -133,24 +134,24 @@ point, since the alternative charges per month for a few hundred of them.
 | | |
 |---|---|
 | **Agent grid** | Role colours, live status dots, account dot on every avatar. |
-| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. It says so while the agent is working — what it is doing, and for how long. The terminal is a toggle away. |
-| **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and read it back as a picture rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone too — the CLI can only read the clipboard of the machine it runs on. |
-| **Answer its questions** | "Do you want to create hello.txt?" is the most frequent thing Claude Code says, and it draws it on the terminal rather than writing it to the transcript. The box is read off the terminal and offered as buttons, marked with the option the CLI's own cursor is on. Clicking one writes that digit into the pty, which is exactly what pressing the key does. Also covers the first-run boxes — theme, login method, folder trust — which the conversation used to show as nothing at all. |
-| **Answer its questions, part two** | The picker `AskUserQuestion` draws — the agent wanting a decision before it carries on — is answerable here too, including the second question and the confirm step. It shows numbers but ignores them, so clicking moves the CLI's own highlight and presses Enter, checked against the screen before the Enter goes out. |
+| **Conversation view** | Rendered from the transcript the CLI writes, not scraped off the terminal: real turns, markdown, tool calls as one-line cards. While the agent is working it says what it is doing and for how long. The terminal is a toggle away. |
+| **Paste an image** | Paste or drop a screenshot into the composer, click the thumbnail to check it full size, and read it back as a picture rather than as a file path. It is written beside the agent and its path goes into the prompt, so this works from your phone as well. The CLI can only read the clipboard of the machine it runs on. |
+| **Answer its questions** | "Do you want to create hello.txt?" is the most frequent thing Claude Code says, and it draws it on the terminal rather than writing it to the transcript. The box is read off the terminal and offered as buttons, marked with the option the CLI's own cursor is on. Clicking one writes that digit into the pty, the same thing pressing the key does. It covers the first-run boxes too (theme, login method, folder trust), which the conversation used to show as nothing at all. |
+| **Answer its questions, part two** | `AskUserQuestion` is how an agent asks for a decision before carrying on. Its picker is answerable here too, including the second question and the confirm step. It shows numbers but ignores them, so clicking moves the CLI's own highlight and presses Enter, checked against the screen before the Enter goes out. |
 | **Interrupt** | Escape, as the CLI's own footer suggests: stops the turn and keeps the session. Stop still ends it. Having only Stop meant an agent heading in the wrong direction cost you the whole conversation. |
-| **Permission mode** | auto, manual, accept edits, plan — switched from the bar above the composer and read back from the CLI, so what is shown is what the session is in. There is no command that jumps to a mode, so the app cycles shift+tab until the terminal agrees; if a mode is not on offer for that model, it says so instead of pretending. |
-| **Says when it needs you** | "waiting" means two different things — waiting for the model, and waiting for a person — and only one is worth walking back to the desk for. The one with a question on screen is marked on its card, counted in the window caption, and flashes the taskbar button when it stops to ask. A flash, not a focus grab: an agent's question is not a reason to yank the cursor out of whatever you are typing elsewhere. |
-| **Rewind** | One click puts the CLI's own rewind picker on screen — restore the code and the conversation to an earlier point. A hand-off rather than a reimplementation, and deliberately: it is an arrow-key list rather than a numbered box, so it cannot become buttons the way a permission prompt can, and picking the wrong row loses work. What did improve is reading it: prompts drawn by the CLI are now rendered on a real character grid instead of having their escape sequences stripped, so the box in the banner is the box on screen rather than a wall of spinner frames. |
-| **`@` completes a path** | Type `@` and a few letters of a filename to pick it from the project — git's file list where there is a repository, so it is your files and not your node_modules. The CLI expands `@path` into the real file when the message is sent, checked by asking an agent to quote a file it had not opened. A path with a typo in it is worse than none: the agent goes looking and reports that it does not exist. |
-| **The agent's plan** | Rebuilt from its own TaskCreate/TaskUpdate calls and shown above the composer as "3/7 · Writing the database schema", with the whole list a click away. The CLI shows this as it works; the app showed nothing, which across a row of agents is the difference between knowing what each one is doing and guessing. |
-| **What it changed, beside the chat** | A rail down the right listing the files this agent has written to, newest first, with a mark for the ones it created and a count for the ones it kept coming back to. Clicking one shows its diff without leaving the conversation. Read from the agent's own tool calls rather than from git — the two answer different questions, and a file it edited and then reverted belongs on this list and not in git's. |
+| **Permission mode** | auto, manual, accept edits and plan, switched from the bar above the composer and read back from the CLI, so what is shown is what the session is in. There is no command that jumps to a mode, so the app cycles shift+tab until the terminal agrees; if a mode is not on offer for that model, it says so instead of pretending. |
+| **Says when it needs you** | "waiting" covers two different states, waiting for the model and waiting for a person, and only one of them is worth walking back to the desk for. The one with a question on screen is marked on its card, counted in the window caption, and flashes the taskbar button when it stops to ask. A flash, not a focus grab: an agent's question is not a reason to yank the cursor out of whatever you are typing elsewhere. |
+| **Rewind** | One click puts the CLI's own rewind picker on screen, which restores the code and the conversation to an earlier point. Handing off rather than reimplementing is deliberate: it is an arrow-key list rather than a numbered box, so it cannot become buttons the way a permission prompt can, and picking the wrong row loses work. What did improve is reading it: prompts drawn by the CLI are now rendered on a real character grid instead of having their escape sequences stripped, so the box in the banner is the box on screen rather than a wall of spinner frames. |
+| **`@` completes a path** | Type `@` and a few letters of a filename to pick it from the project. Where there is a repository it uses git's file list, so you get your files rather than your node_modules. The CLI expands `@path` into the real file when the message is sent, checked by asking an agent to quote a file it had not opened. A path with a typo in it is worse than none: the agent goes looking and reports that it does not exist. |
+| **The agent's plan** | Rebuilt from its own TaskCreate/TaskUpdate calls and shown above the composer as "3/7 · Writing the database schema", with the whole list a click away. The CLI shows this as it works and the app used to show nothing, so across a row of agents you were guessing. |
+| **What it changed, beside the chat** | A rail down the right listing the files this agent has written to, newest first, with a mark for the ones it created and a count for the ones it kept coming back to. Clicking one shows its diff without leaving the conversation. Read from the agent's own tool calls rather than from git. The two answer different questions: a file the agent edited and then reverted belongs on this list, and does not belong in git's. |
 | **Files** | Browse the project, read a file with line numbers and highlighting, edit it and save. A save carries the hash the file was opened at, so if an agent rewrote it meanwhile the save is refused rather than clobbering their work. |
-| **A worktree each** | Several agents on one repository edit the same files, and one's half-finished change silently becomes another's starting point. Switch it on per agent and each gets its own git checkout on its own branch off the same history — working in parallel, merged deliberately. The trees live in the app's state directory, not inside the repo, so they never appear in the file browser or in `git status`. Review → Worktrees lists them; removing one asks git first, and git refuses to throw away uncommitted work. |
-| **Activity in the tree** | A project's badge says what its agents are doing, not just how many there are: working pulses, waiting-on-you is steady and bright, running-but-idle is a quiet dot, and the moment the last one stops working it flashes green once and settles. That last one is a transition, so it is the thing nothing could report before — you had to be watching. Collapsed, the ☰ carries the same summary. |
-| **Collapse the panel** | The projects panel is 268px of a window that is mostly conversation, and you only need it while switching project. ☰ or Ctrl-B hides it and gives the space to the work; the choice is remembered per browser, because a phone and a desktop want different answers. On a phone the same button opens it as an overlay, which is what it already did. |
-| **Go to anything** | Ctrl-K lists every agent, project, panel and view and filters as you type. Agents first and carrying their state, because "which one wanted me" is the question being asked most of the time: one waiting on an answer sorts above one that is working, which sorts above one that is idle. Matching is a subsequence, so `bkw` finds *Backend worker* without anyone having to remember the words. The topbar carries the button with its key printed beside it — a shortcut nobody can see is a shortcut nobody uses. |
-| **Desktop alerts** | The point of running eight agents is that you are not watching any of them, and the only way to learn that one had stopped to ask something was to come back and look. A notification and a short chime when an agent asks, when a session dies, and — if you ask for it — when a turn finishes. Off until switched on in Settings, because a permission prompt nobody invited is its own kind of rude, and silent while the window is in front of you. A wave arrives as one line: sending the same prompt to six agents ends six turns at once, and six notifications up the side of the screen get dismissed unread. |
-| **The keyboard, written down** | `?` opens the list of shortcuts — but only when it is a question and not a character being typed. A test reads the handlers and fails if the list has stopped matching them. |
+| **A worktree each** | Several agents on one repository edit the same files, and one's half-finished change silently becomes another's starting point. Switch it on per agent and each gets its own git checkout on its own branch off the same history, so they work in parallel and merge deliberately. The trees live in the app's state directory, not inside the repo, so they never appear in the file browser or in `git status`. Review → Worktrees lists them; removing one asks git first, and git refuses to throw away uncommitted work. |
+| **Activity in the tree** | A project's badge says what its agents are doing, not just how many there are: working pulses, waiting-on-you is steady and bright, running-but-idle is a quiet dot, and the moment the last one stops working it flashes green once and settles. That last one is a transition, so nothing could report it before and you had to be watching. Collapsed, the ☰ carries the same summary. |
+| **Collapse the panel** | The projects panel is 268px of a window that is mostly conversation, and you only need it while switching project. ☰ or Ctrl-B hides it and gives the space to the work; the choice is remembered per browser, because a phone and a desktop want different answers. On a phone the same button opens it as an overlay, as it already did. |
+| **Go to anything** | Ctrl-K lists every agent, project, panel and view and filters as you type. Agents first and carrying their state, because "which one wanted me" is the question being asked most of the time: one waiting on an answer sorts above one that is working, which sorts above one that is idle. Matching is a subsequence, so `bkw` finds *Backend worker* without anyone having to remember the words. The topbar carries a button with the key printed next to it, since nobody uses a shortcut they cannot see. |
+| **Desktop alerts** | The point of running eight agents is that you are not watching any of them, and the only way to learn that one had stopped to ask something was to come back and look. You get a notification and a short chime when an agent asks something, when a session dies, and optionally when a turn finishes. It stays off until you switch it on in Settings, since an uninvited permission prompt is rude, and it stays silent while the window is in front of you. A wave arrives as a single line: send the same prompt to six agents and six turns end at once, and six stacked notifications get dismissed unread. |
+| **The keyboard, written down** | `?` opens the list of shortcuts, though only when it is a question rather than a character being typed. A test reads the handlers and fails if the list has stopped matching them. |
 | **Split view** | N-way tiling, columns or rows, pinned panes, layout saved per project. Every pane is interactive. |
 | **Live terminals** | Real PTYs over websocket into xterm.js, 256KB scrollback replayed on attach. |
 | **Morph** | Change a running agent's role in place, keeping its conversation. Optional "fresh eyes". |
@@ -159,9 +160,9 @@ point, since the alternative charges per month for a few hundred of them.
 | **Dev terminals** | Saved per-project commands with live output, reachable from your phone. |
 | **SSH** | Saved hosts, one-click shell using your own ssh client, tunnels for private databases. |
 | **Restore on launch** | Reopens the agents and commands that were running when you quit. |
-| **A window of its own** | An agent runs for half an hour and you want to watch it while working in another, which on a desk with two monitors means two windows and not two tabs in one. ⧉ on a conversation opens that agent in its own window; ⧉ on a project opens the project. A pop-out is the same page with a starting position in its address, so there is no second UI to keep in step — it opens, reads what it is for out of its own URL, and goes there, with the same event socket and the same answers-to-questions as any other window. A window onto one conversation drops the project list and the tabs, because every pixel of frame is a pixel not showing the conversation; a window onto a project keeps its tabs, because moving between the board and the files is the whole point of it. Asking twice raises the window you already have. From a phone it opens a tab instead, which is the honest thing a phone can do. |
-| **Quit, from inside** | Ctrl-C in a console was the only way out, and the console is given back at startup now so that no black box sits behind the window. Quit lives in Settings and in Ctrl-K, asks first and says how many sessions it is about to end. It is also what lets every launch mode drop its console, not just the desktop window — a browser tab has no window to close and no icon in the notification area. `--browser none` keeps its terminal, because somebody running this as a bare server has nothing else to stop it with. |
-| **Closing the window does not stop the work** | The X drops the app to the notification area and the agents carry on, because the window is a view onto a server that is perfectly happy without it. Click the icon to come back; Quit is on its right-click menu. A hidden window has no taskbar button to flash, so while it is down there an agent's question raises a balloon from the icon and the icon's tooltip says how many are waiting — that works whether or not the browser notifications were ever switched on. The first time it hides it says so, once, because somebody who closes a window expects it to be closed. |
+| **A window of its own** | An agent runs for half an hour and you want to watch it while working in another. On a desk with two monitors that means two windows, not two tabs. ⧉ on a conversation opens that agent in its own window; ⧉ on a project opens the project. A pop-out is the same page with a starting position in its address, so there is no second UI to keep in step: it opens, reads what it is for out of its own URL, and goes there, with the same event socket and the same answering of questions as any other window. A window onto one conversation drops the project list and the tabs to give the space to the conversation. A window onto a project keeps its tabs, since moving between the board and the files is what you opened it for. Asking twice raises the window you already have. From a phone it opens a tab instead. |
+| **Quit, from inside** | Ctrl-C in a console used to be the only way out, and the console is given back at startup now so that no black box sits behind the window. Quit lives in Settings and in Ctrl-K, asks first, and says how many sessions it is about to end. Having it lets every launch mode drop its console rather than only the desktop window, since a browser tab has no window to close and no icon in the notification area. `--browser none` keeps its terminal, because somebody running this as a bare server has nothing else to stop it with. |
+| **Closing the window does not stop the work** | The X drops the app to the notification area and the agents carry on, since the window is only a view onto a server that runs perfectly well without it. Click the icon to come back; Quit is on its right-click menu. A hidden window has no taskbar button to flash, so while it is down there a question raises a balloon from the icon instead, and the tooltip says how many agents are waiting. That works whether or not the browser notifications were ever switched on. The first time it hides it says so, once, because somebody who closes a window expects it to be closed. |
 
 ### Work intake
 | | |
@@ -171,8 +172,8 @@ point, since the alternative charges per month for a few hundred of them.
 | **Ticket scoping** | A PM pass reads the real codebase and writes a brief onto the ticket before any code is written. |
 | **Prompt library** | Folders, personal flag, and `{{prompt:name}}` chaining so shared rules live in one place. |
 | **Skills library** | `SKILL.md` with triggers, exportable to any runtime that reads the format. |
-| **MCP servers, per account** | Every account's servers in one list, and a copy between them. Sharing your user layer does not cover these: they live in `.claude.json`, which also holds session history and per-project state, so it cannot be linked the way commands and skills are — and a newly signed-in account therefore has none of them, with nothing to say so. Values are never shown; the copy moves them file to file so a database password does not pass through the API or a command line. |
-| **Project memory** | What agents learned — decisions, pitfalls, conventions — surviving the session, read by every agent. |
+| **MCP servers, per account** | Every account's servers in one list, and a copy between them. Sharing your user layer does not cover these: they live in `.claude.json`, which also holds session history and per-project state, so it cannot be linked the way commands and skills are. A newly signed-in account therefore has none of them, with nothing on screen to say so. Values are never shown, and the copy moves them file to file, so a database password never passes through the API or a command line. |
+| **Project memory** | Decisions, pitfalls and conventions the agents learned, kept past the end of the session and read by every agent. |
 
 ### Automation
 | | |
@@ -185,23 +186,23 @@ point, since the alternative charges per month for a few hundred of them.
 | | |
 |---|---|
 | **Per-agent diff** | Filter the working tree by which agent touched which file, read back from each agent's own transcript. |
-| **Split diff** | Side by side with line numbers on both sides, git's own hunk context, and the changed fragment marked *inside* an edited line — so a renamed variable does not look like a rewritten one. Unified is a toggle away, and a new file shows its contents instead of "no textual diff". |
+| **Split diff** | Side by side with line numbers on both sides, git's own hunk context, and the changed fragment marked *inside* an edited line, so a renamed variable does not look like a rewritten one. Unified is a toggle away, and a new file shows its contents instead of "no textual diff". |
 | **Commit messages** | Written from the real staged diff, in your house style. |
 | **Commit context** | Attaches the agent conversation behind a commit as a file in the repo, credentials stripped. Nothing is uploaded. |
-| **Token meter** | Input, output, cache writes and reads, cache hit rate, tool uses, models routed — straight from Claude's own JSONL. |
+| **Token meter** | Input, output, cache writes and reads, cache hit rate, tool uses and models routed, straight from Claude's own JSONL. |
 | **Contextual tips** | Chosen from your live numbers, each with a ready-to-send prompt. |
 | **Statistics** | Tokens per agent and per account, cache rates, minutes, switches. |
 | **Adaptive model** | Reads the prompt before you send it and suggests the cheapest model that will do the job. |
 | **Process guard** | Finds child processes that are large, old AND idle at once. Nothing is ended unless you ask. |
-| **Search every conversation** | Ctrl-Shift-F over everything the agents have ever said — every message, every tool call, every result. Before this, an answer you did not remember the location of was gone. 2.3GB across 1,127 transcripts here, read in 2.7 seconds by four readers at once, because the scan is a raw substring match over the bytes and JSON is parsed only for the lines that already matched. It searches the subagents too, which are 858 of those files and where most of the detail is. The footer says how much was actually read: "nothing found" and "nothing found in the part I had time for" are different answers. |
-| **What happened while you were out** | An Activity tab: started, asked, finished, handed over at a quota limit, died — with the time, the agent and the project. Kept by the server rather than the page, because the hours worth reading about are the ones when nobody had it open. Token counters are not in it; every busy agent emits one every few seconds and they would be the only thing there. |
+| **Search every conversation** | Ctrl-Shift-F over every message, tool call and result the agents have produced. Before this, an answer you could not place was gone. 2.3 GB across 1,127 transcripts here, read in 2.7 seconds by four readers at once: the scan is a raw substring match over the bytes, and JSON is parsed only for lines that already matched. It reaches the subagent transcripts too, which are 858 of those files and hold most of the detail. The footer reports how much was actually read, so an empty result can be told apart from an unfinished one. |
+| **What happened while you were out** | An Activity tab listing what started, asked, finished, handed over at a quota limit or died, with the time, the agent and the project. The server keeps it rather than the page, since the interesting hours are the ones when nobody had the app open. Token counters are left out: every busy agent emits one every few seconds and they would crowd out everything else. |
 
 ### Environment
 | | |
 |---|---|
-| **Secret vault** | DPAPI on Windows, AES-GCM under an owner-only key elsewhere. Referenced as `{{secret:NAME}}` and resolved at launch. There is no code path that returns a value — not to the UI, not to the API, not to an agent. |
+| **Secret vault** | DPAPI on Windows, AES-GCM under an owner-only key elsewhere. Referenced as `{{secret:NAME}}` and resolved at launch. No code path returns a value to the UI, the API or an agent. |
 | **Databases** | MySQL and PostgreSQL, read-only by default, one statement per call, stacked statements refused, results capped, optional SSH tunnel. Agents query by naming a connection. |
-| **Voice** | Dictation and read-aloud on the browser's own Web Speech API — free, no backend, no metered hours. |
+| **Voice** | Dictation and read-aloud on the browser's own Web Speech API. Free, with no backend and no metered hours. |
 | **Doctor** | Answers "why would an agent not start" before you have to guess. |
 
 ## Install
@@ -214,17 +215,16 @@ go build -o go-ai-team.exe .     # or: go build -o go-ai-team .
 ./go-ai-team.exe
 ```
 
-It opens in **a real application window**: its own icon in the taskbar and
-Alt-Tab, native title bar and controls, no address bar, no tabs, and no browser
+It opens in **a real application window** with its own icon in the taskbar and
+Alt-Tab, a native title bar and controls, and no address bar. There is no browser
 to install or borrow. See below.
 
 ### A native window, not Electron and not Chrome
 
-The UI is a web page, which is what lets the same app open on your phone and
-costs nothing to ship. What it should never have needed is *somebody else's
-browser* to display it — that meant a Chrome dependency, a profile directory to
-manage, and a window that was still recognisably a browser pretending not to be
-one.
+The UI is a web page. That is how the same app opens on your phone, and it costs
+nothing to ship. What it should never have needed was *somebody else's browser*
+to display it. That meant a Chrome dependency, a profile directory to manage, and
+a window still recognisably a browser pretending not to be one.
 
 Windows already ships an embedded web view: **WebView2**, part of Edge, present
 on every Windows 11 machine. The app uses it directly. The binding is pure Go,
@@ -240,37 +240,37 @@ hundred that bundling a browser engine costs.
 --browser-profile   put the Chrome profile somewhere else
 ```
 
-The window remembers where you left it — position, size, and whether it was
-maximized, keeping the restored size separately so maximising and quitting does
-not lose it. Closing it shuts the app down properly: what was running is
-recorded first, so **Restore on launch** brings it back.
+The window remembers where you left it: position, size, and whether it was
+maximized, with the restored size kept separately so that maximising and then
+quitting does not lose it. Closing shuts the app down properly. What was running
+gets recorded first, so **Restore on launch** can bring it back.
 
-If the WebView2 runtime is missing, it falls back to `app` rather than failing —
-you get the UI in Chrome instead of an error. On macOS and Linux it falls back
-the same way, since the native window is Windows-only so far.
+If the WebView2 runtime is missing it falls back to `app` rather than failing, and
+you get the UI in Chrome instead of an error. macOS and Linux fall back the same
+way, since the native window is Windows-only so far.
 
-Two Windows details worth knowing, both of which produced real bugs:
+Two Windows details produced real bugs here:
 
 - Windows **ignores the argument to the first `ShowWindow` call** in a process
   and uses whatever the launcher put in `STARTUPINFO`. Anything that starts the
-  app minimized or hidden — a shortcut set to "Minimized", a scheduler, a
-  background shell — otherwise gets a window that never appears while the app
-  runs and listens invisibly, which looks exactly like a crash. It is shown a
+  app minimized or hidden, such as a shortcut set to "Minimized", a scheduler or
+  a background shell, otherwise gets a window that never appears while the app
+  runs and listens invisibly. That looks exactly like a crash. It is shown a
   second time, deliberately.
-- It stays a **console** program, because it has flags, an `mcp` subcommand and a
-  banner carrying the phone URL and token. In desktop mode the console window is
-  hidden only when this process is the sole thing attached to it — launched from
-  a terminal, that terminal is yours and is left alone.
+- It stays a **console** program, since it has flags, an `mcp` subcommand and a
+  banner carrying the phone URL and token. In desktop mode the console is given
+  back only when this process is the sole thing attached to it. Launched from a
+  terminal, that terminal is yours and is left alone.
 
 Chrome, Edge, Brave, Vivaldi and Chromium are all driven the same way; whichever
 is found first is used, and if none is present it falls back to your default
 browser and says so.
 
-The profile is a real, separate Chrome profile — you can sign into a different
-Google account in it, install different extensions, and none of it touches your
-browsing. Deleting the folder is safe; it is recreated on the next launch. A
-`README.txt` inside says the same thing, because an unexplained 100 MB directory
-in a dotfolder is exactly what gets deleted in confusion later.
+The profile is a real, separate Chrome profile. You can sign into a different
+Google account in it and install different extensions, and none of it touches
+your browsing. Deleting the folder is safe; it is recreated on the next launch.
+A `README.txt` inside says the same thing, since an unexplained 100 MB directory
+in a dotfolder tends to get deleted in confusion later.
 
 Preferences are seeded before Chrome starts. The one that earns its keep is
 `exit_type: Normal`: without it, Chrome shows the "didn't shut down correctly /
@@ -283,9 +283,10 @@ For a launcher you can double-click, opt in explicitly:
 ./go-ai-team.exe --install-shortcut
 ```
 
-That writes `Go AI Team.lnk` to your desktop (a `.command` on macOS, a
-`.desktop` entry on Linux). It is behind a flag rather than automatic, because
-writing to somebody's desktop uninvited is not something a tool should decide.
+That writes `Go AI Team.lnk` to your desktop, a `.command` on macOS and a
+`.desktop` entry on Linux. It sits behind a flag rather than happening
+automatically, since writing to somebody's desktop uninvited is not a tool's
+decision to make.
 
 ### From your phone
 
@@ -346,13 +347,13 @@ So "the file exists" proves nothing. The first version of this made exactly that
 mistake and cheerfully reported two signed-out directories as `2/2 signed in`;
 the failure only showed up as a red *Not logged in* line inside the terminal.
 
-That is worse than cosmetic, because the auto-switch fallback picker uses the
-same signal — it would have handed a live conversation to a dead account at
-precisely the moment the feature exists to rescue it.
+That is worse than cosmetic. The auto-switch fallback picker reads the same
+signal, so it would have handed a live conversation to a dead account at the one
+moment the feature exists to rescue it.
 
 The check now reads the file and reports `active`, `refreshable`, `loggedOut`,
 `missing` or `unreadable`. Only the first two count as usable. `expiresAt` is
-frequently `0` on a working account, so a zero means "not stated" rather than
+frequently `0` on a working account, so a zero is read as "not stated" instead of
 "expired in 1970".
 
 ## How the account binding works
@@ -373,7 +374,7 @@ Then, from disk
 ```
 
 The account is resolved **once**, at spawn, and every later display reads that
-frozen answer — so the badge on screen can never disagree with the process.
+frozen answer. The badge on screen therefore cannot disagree with the process.
 
 Transcript lookup tries the encoded-cwd path first, then falls back to globbing
 `projects/*/<sessionId>.jsonl`. The session id is authoritative, so if Claude
@@ -394,11 +395,11 @@ CLAUDE_CODE_BRIDGE_SESSION_ID  CLAUDE_CODE_EXECPATH
 CLAUDE_PID                     CLAUDE_EFFORT
 ```
 
-Two matter a lot. `CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN` point at the *parent*
-session's IPC channel. And `CLAUDE_CODE_CHILD_SESSION` makes the CLI skip
-writing a transcript — which silently kills the token meter, since there is then
-no JSONL to read. This was observed in a real run: the agent booted with
-`⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`.
+Two of them matter a lot. `CLAUDE_CODE_MESSAGING_SOCKET` and `_TOKEN` point at
+the *parent* session's IPC channel. `CLAUDE_CODE_CHILD_SESSION` makes the CLI
+skip writing a transcript, which silently kills the token meter because there is
+then no JSONL to read. This turned up in a real run, with the agent booting on
+`⚠ Transcript saving is off, inherited CLAUDE_CODE_CHILD_SESSION marker`.
 
 So every spawn starts from a filtered environment. The filter is a precise
 deny-list plus two narrow patterns (`*_SESSION_ID`, `*_MESSAGING_*`) rather than
@@ -409,23 +410,24 @@ the whole `CLAUDE_CODE_` prefix, because legitimate settings like
 
 When the CLI says it is out of quota:
 
-1. The account is **benched** — using the provider's own reset time when it
-   publishes one — even if there is nowhere to switch to, so the next agent does
-   not walk into the same wall.
+1. The account is **benched**, using the provider's own reset time when it
+   publishes one. This happens even when there is nowhere to switch to, so the
+   next agent does not walk into the same wall.
 2. A replacement is chosen: signed in on disk, not benched, not opted out, least
    recently used.
 3. The transcript is **copied into the incoming account's tree**. A Claude
-   session physically lives inside the account that created it, so without this
-   `--resume` would open an empty conversation — exactly the loss the feature
-   exists to prevent.
+   session physically lives inside the account that created it, so without the
+   copy `--resume` opens an empty conversation, losing the thing the feature
+   exists to save.
 4. The CLI is relaunched with `--resume` and nudged to *continue*, not restart.
 5. The bench lifts by itself when the window reopens.
 
-**A pattern match is a suspicion, not a verdict.** This is the correction of a
-claim that used to sit here. Matching alone benched a perfectly healthy account
-during testing, on a line of prose that merely *discussed* rate limits and
-happened to be on screen — and no wording is clever enough to prevent that,
-because a terminal shows file contents, fetched pages and conversation text.
+**A pattern match is a suspicion, not a verdict.** This corrects a claim that
+used to sit here. During testing, matching alone benched a perfectly healthy
+account on a line of prose that merely *discussed* rate limits and happened to be
+on screen at the time. No wording is clever enough to prevent that. A terminal
+shows file contents, fetched pages and conversation text, and any of them can
+contain the words.
 
 So a match is confirmed by behaviour before anything irreversible happens: the
 session is watched for a few seconds, and a real limit stops it dead, whereas
@@ -433,11 +435,11 @@ content that only mentions one is followed by the agent carrying straight on.
 Warnings, percentages and quota panels are still ignored by construction, quoted
 lines are skipped, only the tail is scanned, there is a 90-second cooldown so a
 resumed conversation cannot re-trigger on its own replayed history, and the
-app's own announcement is excluded. Those narrow the noise; the confirmation is
-what makes acting on a match safe.
+app's own announcement is excluded. Those narrow the noise, and the confirmation
+step is what allows the app to act on a match at all.
 
-Any account can be marked **never a backup** — the right answer when you keep a
-strict line between an employer's subscription and your own.
+Any account can be marked **never a backup**. That is the right setting if you
+keep a strict line between an employer's subscription and your own.
 
 ## Security posture
 
@@ -493,29 +495,31 @@ go test -tags uitest ./internal/server/ -run TestUI  # UI smoke test
 The UI test launches **its own headless Chrome** on a throwaway temp profile and
 drives it over the DevTools protocol: it walks every tab and panel, checks
 nothing crashed, and asserts the layout has not grown wider than the window. It
-never touches a profile a person is signed into — not yours, and not the app's
-own. It is behind a build tag so the ordinary suite stays fast and needs no
-browser installed.
+never touches a profile a person is signed into, yours or the app's own. It sits
+behind a build tag so the ordinary suite stays fast and needs no browser
+installed.
 
-**205 tests in the fast suite, 18 more behind the UI tag.** Covered: the cwd
-encoder against real transcript directories, the cascade in every direction, provider isolation, dangling references, folder
-cycles, project cascade-delete, the ring buffer's exact-wrap case, the limit
-detector's true and false positives, environment filtering, credential auth
-states, schedule arithmetic including short months, webhook signatures and
-gating, SQL write/stacked-statement classification, vault round-trips including
-"the value is not readable on disk", the MCP protocol and its project scope,
-JSON salvage, the list-endpoint contract, and the browser profile's preference seeding.
+**205 tests in the fast suite, 18 more behind the UI tag.** They cover the cwd
+encoder against real transcript directories, the cascade in every direction,
+provider isolation, dangling references, folder cycles, project cascade-delete,
+the ring buffer's exact-wrap case, the limit detector's true and false positives,
+environment filtering, credential auth states, schedule arithmetic including
+short months, webhook signatures and gating, SQL write and stacked-statement
+classification, vault round-trips including "the value is not readable on disk",
+the MCP protocol and its project scope, JSON salvage, the list-endpoint contract,
+and the browser profile's preference seeding.
 
 ### Bugs that only showed up when it was run
 
 Several of those tests exist because the code was run for real and something
-broke that review had not caught. Each one keeps its own evidence, because a
-regression test with no story attached is a test somebody eventually deletes.
+broke that review had not caught. Each one keeps its own evidence. A regression
+test with no story attached is a test somebody eventually deletes.
 
 - **The pseudo-terminal must be closed exactly once.** A second
-  `ClosePseudoConsole` on a closed handle ends the whole process on Windows —
-  no panic, no error, nothing in the log. Two closes were reachable together, so
-  pressing **Stop** killed Go AI Team and every other agent it was running.
+  `ClosePseudoConsole` on a closed handle ends the whole process on Windows.
+  Nothing is raised and nothing reaches the log. Two closes were reachable
+  together, so pressing **Stop** killed Go AI Team and every other agent it was
+  running.
 - **Prompt delivery is verified, not assumed.** Two different things went wrong
   and looked identical: the return swallowed by bracketed paste, leaving the text
   typed and unsent; and the paste arriving while the CLI was still connecting, so
@@ -528,86 +532,88 @@ regression test with no story attached is a test somebody eventually deletes.
   process is overridden by whatever the launcher asked for, so a shortcut set to
   "Minimized" produced an app that ran, listened, and never appeared.
 - **Hiding the console window stopped working, silently.** `ShowWindow(SW_HIDE)`
-  on `GetConsoleWindow()` is the classic move and it is a no-op on Windows 11:
-  with Windows Terminal as the host — what "Let Windows decide" resolves to —
-  the box on screen belongs to WindowsTerminal.exe and the handle you are given
-  was never visible. Measured by listing every process with a visible window
-  before and after. `FreeConsole` is what actually removes it, so output is
-  pointed at a log file and the console is given back rather than hidden.
+  on `GetConsoleWindow()` is the classic move and it is a no-op on Windows 11.
+  With Windows Terminal as the host, the setting "Let Windows decide" resolves
+  to, the box on screen belongs to WindowsTerminal.exe and the handle you are
+  given was never visible. Measured by listing every process with a visible
+  window before and after. `FreeConsole` removes it, so output is pointed at a
+  log file and the console is given back rather than hidden.
 - **A session's id is not fixed for the life of the process.** `--resume` opens a
   picker, and choosing a conversation switches the CLI to that conversation's id.
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
 - **A file called `api_windows.go` is a Windows-only file.** Go reads a GOOS
-  name off the end of a filename with no build tag and no warning, so the
-  pop-out handler — meant for every platform — left the server package unable to
-  compile on Linux or macOS. It passed every check on the machine it was written
-  on, which is the whole difficulty. A test now refuses any filename in that
-  package ending in a GOOS or GOARCH.
+  name off the end of a filename with no build tag and no warning. The pop-out
+  handler was meant for every platform, and its name left the server package
+  unable to compile on Linux or macOS. It passed every check on the machine it
+  was written on. A test now refuses any filename in that package ending in a
+  GOOS or GOARCH.
 - **`Terminate` posts the quit to whichever thread calls it.** The window
-  binding's own comment says it is safe from a background thread; it calls
+  binding's own comment says it is safe from a background thread. It calls
   `PostQuitMessage`, which posts to the *calling* thread's queue, so from a
   goroutine the quit lands where nobody is reading. Quit in the page and Ctrl-C
-  in the terminal both did nothing to the desktop window, while the notification
-  icon's Quit worked — because that one is called from inside the window
-  procedure. `Dispatch` is the way across.
-- **The repository is not always the project directory.** A project kept as a
-  working folder — the checkout inside it, beside notes, credentials and a
-  scratch script — is not a repository itself, so every git feature answered
-  about the folder instead of the code in it: no diffs, an empty review pane, no
-  commit messages, on a checkout with a hundred commits. git walks *up* on its
-  own, which is why a project inside a repository always worked; one level down
-  is now searched too, and more than one candidate is reported rather than
-  guessed at. A file that lives beside the checkout says so instead of showing
-  an empty pane.
+  in the terminal both did nothing to the desktop window. The notification icon's
+  Quit worked, because that one runs inside the window procedure. `Dispatch` is
+  the way across.
+- **The repository is not always the project directory.** Keep a project as a
+  working folder, with the checkout inside it next to notes, credentials and a
+  scratch script, and the folder itself is not a repository. Every git feature
+  then answered about the folder instead of the code in it: no diffs, an empty
+  review pane, no commit messages, on a checkout with a hundred commits behind
+  it. git walks *up* on its own, so a project inside a repository always worked.
+  One level down is now searched too, and more than one candidate is reported
+  rather than guessed at. A file that lives beside the checkout says so instead
+  of showing an empty pane.
 - **An explanation is not a diff.** The diff endpoint answered "This project is
   not a git repository" as a 200 with a body, and the caller decided what it had
   by asking whether the body was empty. It was not, so the sentence went into
   the diff parser, which found no hunks and reported "No textual diff (binary,
-  or no change)" — every file an agent had just rewritten, in any project
-  without a repository, shown as unchanged. The reason was in the response the
-  whole time. Answers are labelled now, and the parser refuses to read prose.
+  or no change)". Every file an agent had just rewritten, in any project without
+  a repository, was shown as unchanged. The reason was in the response the whole
+  time. Answers are labelled now, and the parser refuses to read prose.
 - **The split diff drew the wrong side.** The inline mark on an added line was
   taken from the line it replaced, so renaming `foo` to `bar` left the "after"
-  column still saying `foo` — in the default view, on every single-line edit.
+  column still saying `foo`. In the default view, on every single-line edit.
   Found by a test written for the bug above.
 - **The folder-trust box is not numbered, and nothing else is like it.** Every
   other question Claude Code asks is a numbered list, so the parser required a
-  digit after the cursor. The trust prompt — the first thing every new project
-  meets — is a bare arrow menu, so an agent started in an unseen directory sat
-  on it indefinitely, reported as merely "waiting", with nothing to click. Found
-  by running a real agent, which is the only way it could have been found.
+  digit after the cursor. The trust prompt is a bare arrow menu, and it is the
+  first thing every new project meets, so an agent started in an unseen
+  directory sat on it indefinitely, reported as merely "waiting", with nothing
+  to click. Only running a real agent could have turned this up.
 - **A transcript is read incrementally, and only its tail.** A real one here was
   257MB. Parsing it whole cost 762ms per poll and 1.24s per 1.5s refresh; now it
   is 0ms and ~100ms.
 - **The end of a turn has to be announced.** The page keeps no timer of its own;
   it draws what the last event said. Token counters arrive while an agent is
   producing them and stop when it stops, so the last one before a quiet finish
-  always said "working" — and with nothing emitted for the flip that followed,
-  the spinner ran on the board and in the project tree until an unrelated click
-  forced a reload. An agent that had finished ten minutes ago still read as busy.
+  always said "working". Nothing was emitted for the flip that followed, so the
+  spinner ran on the board and in the project tree until an unrelated click
+  forced a reload. An agent that had finished ten minutes ago still read as
+  busy.
 
-`scratchpad/live_check.py` is the one that needs a real account and spends
-quota: it starts an agent, answers the question it stops on, and then asks the
-activity log and the transcript search whether they saw any of it. Run
-deliberately, not in a loop — it is what found the trust-prompt bug above.
+`scratchpad/live_check.py` needs a real account and spends quota. It starts an
+agent, answers the question it stops on, then asks the activity log and the
+transcript search whether they saw any of it. Run it deliberately rather than in
+a loop. It found the trust-prompt bug above.
 
 ## Not built
 
-Cloud agents (needs a cloud provider), a public feedback portal for clients,
-Figma capture, a remote-fleet relay, and the non-Claude providers — the account
-model is provider-shaped and the env vars are wired, but only Claude is exercised.
-Mongo connections are saved and tunnelled but statements are not executed.
+Cloud agents (which need a cloud provider), a public feedback portal for
+clients, Figma capture, and a remote-fleet relay. The non-Claude providers are
+half done: the account model is provider-shaped and the env vars are wired, but
+only Claude is exercised. Mongo connections are saved and tunnelled, though
+statements are not executed.
 
 ## Contributing
 
 Pull requests are welcome, and so are bug reports that say what you did and what
 happened.
 
-**Getting set up** is the same four lines as the quick start — Go 1.24 and
-nothing else. `go test ./...` needs no browser and no network. The UI tests want
-a Chrome-family browser and run behind a build tag; they launch their own
+**Getting set up** is the same four lines as the quick start. You need Go 1.24
+and nothing else. `go test ./...` wants no browser and no network. The UI tests
+want a Chrome-family browser and sit behind a build tag; they launch their own
 headless copy on a throwaway profile and never touch a browser you are signed
 into.
 
@@ -618,16 +624,17 @@ go test -tags uitest ./internal/server/ -run TestUI   # the UI, in headless Chro
 GOOS=linux go build ./... && GOOS=darwin go build ./...   # it has to cross-compile
 ```
 
-**Where things are** is in [Layout](#layout), and the conventions this codebase
-actually holds itself to are in [CLAUDE.md](CLAUDE.md) — worth five minutes
-before a first change, because several of them exist for reasons that are not
-obvious and are documented where they bite.
+**Where things are** is in [Layout](#layout). The conventions this codebase
+actually holds itself to are in [CLAUDE.md](CLAUDE.md), and five minutes there
+before a first change will save you time. Several of them exist for reasons that
+are not obvious, and each is documented where it bites.
 
-**The house style, briefly.** Comments explain *why*, especially where the
-obvious approach is wrong; errors say what to do next in plain language; a list
-endpoint returns `[]` and never `null`; nothing is killed, deleted or uploaded
-without being asked. If you fix something that only showed up when the thing was
-run, add it to the list above — that list is the most useful part of this file.
+**The house style, briefly.** Comments explain *why*, and they earn their keep
+where the obvious approach turns out to be wrong. Errors say what to do next, in
+plain language. A list endpoint returns `[]` and never `null`. Nothing is killed,
+deleted or uploaded without being asked. If you fix something that only showed up
+once the thing was actually run, add it to the list above; that list is the most
+useful part of this file.
 
 **Good first issues** tend to live in the gaps: the non-Claude providers are
 wired but unexercised, the desktop window is Windows-only (the server and UI are
