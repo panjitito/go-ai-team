@@ -28,6 +28,7 @@ import (
 	"github.com/uniair/go-ai-team/internal/accounts"
 	"github.com/uniair/go-ai-team/internal/ai"
 	"github.com/uniair/go-ai-team/internal/automation"
+	"github.com/uniair/go-ai-team/internal/browser"
 	"github.com/uniair/go-ai-team/internal/catalog"
 	"github.com/uniair/go-ai-team/internal/claudefs"
 	"github.com/uniair/go-ai-team/internal/dbx"
@@ -70,6 +71,13 @@ type Server struct {
 	quitMu sync.Mutex
 	onQuit func()
 
+	// baseURL is the address this server answers on, and windowMode is how the
+	// app opened its first window. Both exist so a pop-out opens the same way
+	// the main window did, on an address the server knows rather than one a
+	// request claimed.
+	baseURL    string
+	windowMode browser.Mode
+
 	// token guards the API when the server is reachable beyond loopback. It is
 	// generated per run and printed once, so binding to the LAN for phone access
 	// does not silently expose an unauthenticated terminal to the network.
@@ -91,6 +99,10 @@ type Deps struct {
 	Hooks    *automation.Hooks
 	Token    string
 	Loopback bool
+	// BaseURL is where this server can be reached from the machine it runs on,
+	// and WindowMode is how the first window was opened.
+	BaseURL    string
+	WindowMode browser.Mode
 }
 
 // New builds a Server.
@@ -99,6 +111,7 @@ func New(d Deps) *Server {
 		st: d.Store, accs: d.Accounts, sm: d.Sessions,
 		ai: d.AI, cat: d.Catalog, vault: d.Vault, db: d.DB, ssh: d.SSH,
 		sched: d.Sched, hooks: d.Hooks, log: &journal{},
+		baseURL: d.BaseURL, windowMode: d.WindowMode,
 		token: d.Token, loopback: d.Loopback,
 	}
 	// Recording starts with the server, not with the first person to open the
@@ -162,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	// --- settings, misc ---
 	mux.HandleFunc("GET /api/activity", s.listActivity)
 	mux.HandleFunc("POST /api/quit", s.quit)
+	mux.HandleFunc("POST /api/windows", s.openWindow)
 	mux.HandleFunc("GET /api/search", s.search)
 
 	mux.HandleFunc("GET /api/settings", s.getSettings)

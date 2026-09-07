@@ -88,6 +88,7 @@ point, since the alternative charges per month for a few hundred of them.
 | **Dev terminals** | Saved per-project commands with live output, reachable from your phone. |
 | **SSH** | Saved hosts, one-click shell using your own ssh client, tunnels for private databases. |
 | **Restore on launch** | Reopens the agents and commands that were running when you quit. |
+| **A window of its own** | An agent runs for half an hour and you want to watch it while working in another, which on a desk with two monitors means two windows and not two tabs in one. ⧉ on a conversation opens that agent in its own window; ⧉ on a project opens the project. A pop-out is the same page with a starting position in its address, so there is no second UI to keep in step — it opens, reads what it is for out of its own URL, and goes there, with the same event socket and the same answers-to-questions as any other window. A window onto one conversation drops the project list and the tabs, because every pixel of frame is a pixel not showing the conversation; a window onto a project keeps its tabs, because moving between the board and the files is the whole point of it. Asking twice raises the window you already have. From a phone it opens a tab instead, which is the honest thing a phone can do. |
 | **Quit, from inside** | Ctrl-C in a console was the only way out, and the console is given back at startup now so that no black box sits behind the window. Quit lives in Settings and in Ctrl-K, asks first and says how many sessions it is about to end. It is also what lets every launch mode drop its console, not just the desktop window — a browser tab has no window to close and no icon in the notification area. `--browser none` keeps its terminal, because somebody running this as a bare server has nothing else to stop it with. |
 | **Closing the window does not stop the work** | The X drops the app to the notification area and the agents carry on, because the window is a view onto a server that is perfectly happy without it. Click the icon to come back; Quit is on its right-click menu. A hidden window has no taskbar button to flash, so while it is down there an agent's question raises a balloon from the icon and the icon's tooltip says how many are waiting — that works whether or not the browser notifications were ever switched on. The first time it hides it says so, once, because somebody who closes a window expects it to be closed. |
 
@@ -464,6 +465,13 @@ that review had not caught. Each keeps its own evidence:
   Reading the metafile once left the app pointing at a transcript that had never
   existed: an empty chat view and a zero token meter on a session with hours of
   history behind it.
+- **`Terminate` posts the quit to whichever thread calls it.** The window
+  binding's own comment says it is safe from a background thread; it calls
+  `PostQuitMessage`, which posts to the *calling* thread's queue, so from a
+  goroutine the quit lands where nobody is reading. Quit in the page and Ctrl-C
+  in the terminal both did nothing to the desktop window, while the notification
+  icon's Quit worked — because that one is called from inside the window
+  procedure. `Dispatch` is the way across.
 - **The repository is not always the project directory.** A project kept as a
   working folder — the checkout inside it, beside notes, credentials and a
   scratch script — is not a repository itself, so every git feature answered

@@ -11,6 +11,13 @@ func Available() (bool, string) {
 
 func Run(o Opts) error { return ErrUnsupported }
 
+// OpenWindow, CloseWindows and OpenWindowCount are the pop-out windows, which
+// need a native window to pop out into. Elsewhere the caller falls back to
+// opening a browser window, which is the same page in a different frame.
+func OpenWindow(url, title, dataDir string) error { return ErrUnsupported }
+func CloseWindows()                               {}
+func OpenWindowCount() int                        { return 0 }
+
 // ReleaseOwnConsole is a Windows problem: elsewhere a program launched from a
 // file manager does not get a console window in the first place.
 func ReleaseOwnConsole(logPath string) bool { return false }

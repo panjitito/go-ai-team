@@ -176,6 +176,11 @@ func main() {
 	// window that was about to be destroyed and nobody ever read it; printed here
 	// it lands in the log, which is where somebody looks when the app started and
 	// they cannot see it. When there is still a console it goes there, as always.
+	// The server has to know its own address and how the app opened its first
+	// window, so a pop-out can be opened the same way on an address the server
+	// knows rather than one a request claimed in a header.
+	app.srv.SetWindowing(localURL, mode)
+
 	stopWith := "Ctrl-C to stop."
 	switch {
 	case released && mode == browser.ModeDesktop:
@@ -215,6 +220,10 @@ func main() {
 
 	shutdown := func(why string) {
 		fmt.Printf("\n%s…\n", why)
+		// Extra windows first. One left behind is a view onto a server that has
+		// stopped answering, which reads as the app hanging rather than as the
+		// app having gone.
+		desktop.CloseWindows()
 		// Record what was running before killing it, so "restore on launch" has
 		// something to restore.
 		app.srv.SaveRestoreState()

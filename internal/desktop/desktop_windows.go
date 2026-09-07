@@ -65,6 +65,20 @@ func Run(o Opts) error {
 	setLive(uintptr(hwnd))
 	defer setLive(0)
 
+	// Quitting, from any thread.
+	//
+	// w.Terminate calls PostQuitMessage, which posts to the *calling* thread's
+	// message queue — so called from a goroutine the quit lands in a queue
+	// nobody is reading and the window never closes. The binding's own comment
+	// says Terminate is safe from a background thread. It is not.
+	//
+	// That is why the notification icon's Quit worked, being called from inside
+	// the window procedure, while Quit in the page and Ctrl-C in the terminal
+	// did nothing at all: both come from a goroutine. Dispatch is the way
+	// across — it posts to the thread that made the window, which then runs the
+	// function itself.
+	quit := func() { w.Dispatch(w.Terminate) }
+
 	// The notification area, and with it a close button that hides rather than
 	// ends every agent. Only when the icon is actually there: swallowing WM_CLOSE
 	// with nothing to click would make the app impossible to close.
@@ -72,7 +86,7 @@ func Run(o Opts) error {
 	// Logged either way. With the console released the log is the only place
 	// this can be seen, and "why did closing the window quit?" is exactly the
 	// question it answers.
-	if installTray(hwnd, w.Terminate) {
+	if installTray(hwnd, quit) {
 		log.Printf("notification icon added; closing the window hides it and the agents keep running")
 	} else {
 		log.Printf("no notification icon: closing the window quits, as it did before")
@@ -122,7 +136,7 @@ func Run(o Opts) error {
 	}()
 
 	if o.Ready != nil {
-		o.Ready(w.Terminate)
+		o.Ready(quit)
 	}
 
 	w.Navigate(o.URL)

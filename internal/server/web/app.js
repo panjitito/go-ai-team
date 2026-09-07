@@ -553,6 +553,10 @@ function renderMain() {
       el('span', { class: 'acct-dot', style: `background:${acct ? acct.color : '#3a4250'}` }),
       acct ? acct.name : 'inherited'),
     el('button', { class: 'btn sm primary', onclick: () => newAgent(p) }, '+ Agent'),
+    POPOUT.project === p.id ? null : el('button', {
+      class: 'btn ghost sm', title: 'Open this project in its own window',
+      onclick: () => popOutProject(p.id),
+    }, '⧉'),
     el('button', { class: 'btn ghost sm', title: 'Project settings', onclick: () => editProject(p) }, '···')));
 
   const grid = el('div', { class: 'grid' });
@@ -1559,7 +1563,9 @@ applyNav();
 // so the state is reapplied rather than left as whatever it was.
 window.matchMedia('(max-width: 780px)').addEventListener('change', applyNav);
 
-loadAll().then(connectEvents).catch(e => {
+applyPopoutChrome();
+
+loadAll().then(goToPopoutTarget).then(connectEvents).catch(e => {
   document.body.innerHTML =
     `<div class="empty"><h3>Could not reach the Go AI Team server</h3><p>${e.message}</p></div>`;
 });

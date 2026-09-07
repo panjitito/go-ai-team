@@ -1127,6 +1127,30 @@ table.kv.tv-fields td:last-child { text-align: left; word-break: break-word; }
   padding: 6px 12px; border-top: 1px solid var(--line);
   font: 10.5px var(--mono); color: var(--fg-mute);
 }
+/* ---- a window opened onto one thing ----
+
+   A pop-out is the same page with a starting position in its address, so the
+   trimming is done here rather than by building a second UI: one class on the
+   body, and the frame that window has no use for stops being drawn.
+
+   A pop-out on one agent loses the project list and the tabs — it is a window
+   onto one conversation, and every pixel of frame is a pixel not showing it. A
+   pop-out on a project keeps its tabs, because moving between the board and the
+   files is the whole reason to have one. */
+
+body.popout .sidebar,
+body.popout .brand { display: none !important; }
+body.popout-chat .tabbar { display: none !important; }
+body.popout #app {
+  grid-template-columns: 1fr;
+  grid-template-rows: 46px 34px 1fr 26px;
+  grid-template-areas: "topbar" "tabs" "main" "status";
+}
+body.popout.popout-chat #app {
+  grid-template-rows: 46px 1fr 26px;
+  grid-template-areas: "topbar" "main" "status";
+}
+
 /* ---- the keyboard sheet ---- */
 
 .keys-group {

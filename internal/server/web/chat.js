@@ -165,6 +165,12 @@ function chatHeader(sess, title) {
 
     el('button', { class: 'btn ghost sm', id: 'hushBtn', style: 'display:none', title: 'Stop speaking', onclick: () => Voice.hush() }, '⏹'),
     el('button', { class: 'btn ghost sm', title: 'Read the last answer aloud (Shift for a condensed read)', onclick: e => readAloud(sessionId, e.shiftKey) }, '🔊'),
+    // Not in a window that is already this agent's own: the button would open
+    // a second window onto what you are already looking at.
+    POPOUT.session === sessionId ? null : el('button', {
+      class: 'btn ghost sm', title: 'Open this agent in its own window',
+      onclick: () => popOutSession(sessionId),
+    }, '⧉'),
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Change role, keep the conversation', onclick: () => morphAgent(sess) }, '⟳') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Fork a twin with this conversation', onclick: () => forkAgent(sess) }, '⑃') : null,
     sess.agentId ? el('button', { class: 'btn ghost sm', title: 'Run on another account', onclick: () => manualSwitch(sess) }, '↻') : null,
