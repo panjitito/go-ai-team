@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,5 +33,24 @@ func main() {
 	}
 	// Something on screen, so the session looks alive rather than crashed.
 	fmt.Println("envdump: wrote the environment, holding the terminal open")
+
+	// A status line, for the check that reads one back. The CLI prints this at
+	// the bottom of its own screen; here it is one line, which is all the
+	// scrape needs.
+	if line := os.Getenv("ENVDUMP_STATUSLINE"); line != "" {
+		fmt.Println(line)
+	}
+	// Then a wall of output, which is what pushes a real status line out of the
+	// window the parser reads. This is the condition the hold exists for.
+	if n, _ := strconv.Atoi(os.Getenv("ENVDUMP_NOISE")); n > 0 {
+		if wait, _ := strconv.Atoi(os.Getenv("ENVDUMP_NOISE_DELAY")); wait > 0 {
+			time.Sleep(time.Duration(wait) * time.Second)
+		}
+		row := strings.Repeat("x", 79)
+		for written := 0; written < n; written += 80 {
+			fmt.Println(row)
+		}
+		fmt.Println("envdump: done being noisy")
+	}
 	time.Sleep(90 * time.Second)
 }

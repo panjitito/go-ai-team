@@ -192,6 +192,7 @@ charges by the month for a few hundred of them.
 | **Commit messages** | Written from the real staged diff, in your house style. |
 | **Commit context** | Attaches the agent conversation behind a commit as a file in the repo, credentials stripped. Nothing is uploaded. |
 | **Token meter** | Input, output, cache writes and reads, cache hit rate, tool uses and models routed, straight from Claude's own JSONL. |
+| **Usage strip** | How much of the five-hour window and the week's allowance has gone, above the composer instead of in the terminal. Read off the CLI's status line, held across a scrape that misses, and marked as held rather than shown as current. [Below](#the-usage-strip). |
 | **Contextual tips** | Chosen from your live numbers, each with a ready-to-send prompt. |
 | **Statistics** | Tokens per agent and per account, cache rates, minutes, switches. |
 | **Adaptive model** | Reads the prompt before you send it and suggests the cheapest model that will do the job. |
@@ -414,6 +415,45 @@ So every spawn starts from a filtered environment. The filter is a precise
 deny-list plus two narrow patterns (`*_SESSION_ID`, `*_MESSAGING_*`) rather than
 the whole `CLAUDE_CODE_` prefix, because legitimate settings like
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` live under that prefix too.
+
+## The usage strip
+
+Above the composer: the model, the permission mode, how full the context is,
+what the session has cost, and two meters for the five-hour window and the
+week's allowance. All of it was already on screen, in the terminal tab, along
+the bottom, in a line you had to switch views to read.
+
+It is scraped from that line rather than asked for, and that has consequences
+worth knowing before you wonder why a number is missing.
+
+**The five-hour and weekly figures exist nowhere else.** They arrive in a JSON
+payload the CLI hands to whatever status-line command you have configured. A
+transcript carries token counts per message and no rate limits at all, so with
+no status-line command there is nothing printing them and nothing to read. On
+this machine two accounts out of three were in that state and the strip was
+blank for ever, with nothing on screen saying why.
+
+So the app can supply the line as well as read it. `go-ai-team statusline` reads
+that payload and prints one line; the strip offers to install it for the account
+in front of you, per account, reversible, and shown before you agree to it. It
+needs nothing else on the machine, since it is the binary that is already
+running. An account that already has its own status line is left alone unless
+you say otherwise, and removing ours refuses to touch one it did not install.
+
+**A reading is held when a scrape misses.** The CLI repaints its footer by
+moving the cursor rather than by appending, and a tool that prints forty
+kilobytes leaves the newest status line well behind it. Every miss used to hide
+the whole strip, so a correct reading vanished and came back on its own. Now the
+last one is kept for five minutes, dimmed, with how long ago it was read on
+hover. Held forever would be worse than blank, so it does expire.
+
+**And a blank strip says which kind of blank it is**, because "waiting for the
+first status line" fixes itself and "this account has no status-line command"
+does not.
+
+`scratchpad/statusline_check.py` runs the whole path against the real app with a
+stand-in for the CLI that prints a status line and then buries it under 60 KB of
+output. Fifteen checks, no account and no quota.
 
 ## Bring your own key
 

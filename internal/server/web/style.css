@@ -1571,6 +1571,25 @@ body.dnd-active .drop-root { display: block; }
 .rb-meter.hot .rb-meter-track i { background: var(--bad); }
 .rb-meter.hot .rb-meter-pct { color: var(--bad); }
 
+/* A held reading, kept because the last scrape found nothing. Dimmed rather
+   than hidden: a figure from a minute ago is worth more than a blank, and
+   pretending it is current would be worth less than either. */
+.rb-stale { opacity: .55; }
+
+/* Why the strip is empty, when it is going to stay empty. A blank row explains
+   nothing, and the answer here is a setting nobody has made rather than
+   anything the app is going to sort out on its own. */
+.rb-note {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--fg-mute); white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.rb-note button {
+  background: none; border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 20px; padding: 1px 8px; cursor: pointer; font: inherit;
+}
+.rb-note button:hover { border-color: var(--brand-dim); color: var(--fg); }
+
 .rb-menu {
   position: fixed; z-index: 150; min-width: 128px;
   background: var(--bg-2); border: 1px solid var(--line-2);

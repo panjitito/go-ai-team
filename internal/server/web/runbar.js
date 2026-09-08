@@ -66,6 +66,9 @@ function runBarEl(sessionId) {
     }),
     el('span', { class: 'rb-stat', id: 'rbCtx', title: 'Context window used' }),
     el('span', { class: 'rb-stat', id: 'rbCost', title: 'Cost of this session' }),
+    // Why there is nothing to the right of here, when there is going to go on
+    // being nothing. See updateRunBar.
+    el('span', { class: 'rb-note', id: 'rbNote', style: 'display:none' }),
     el('span', { style: 'flex:1' }),
     meterEl('rb5h', '5h'),
     meterEl('rbWk', 'wk'));
@@ -82,7 +85,7 @@ function meterEl(id, label) {
 }
 
 // updateRunBar redraws from the latest poll.
-function updateRunBar(d) {
+function updateRunBar(d, sess) {
   const bar = $('#runBar');
   if (!bar || !d) return;
   const line = d.line || {};
@@ -104,22 +107,45 @@ function updateRunBar(d) {
 
   updatePlan(d.tasks || []);
 
-  setStat('#rbCtx', line.hasContext, () => `ctx ${line.context}%`);
-  setStat('#rbCost', line.hasCost, () => '$' + Number(line.cost).toFixed(2));
-  setMeter('#rb5h', line.hasFiveHour, line.fiveHour);
-  setMeter('#rbWk', line.hasWeekly, line.weekly);
+  // age is how long ago the server last managed to read any of this. The values
+  // are held across a scrape that finds nothing, so a number on screen can be a
+  // minute old, and saying so is the difference between a stale reading and a
+  // wrong one.
+  const age = Number(line.ageSeconds) || 0;
+  setStat('#rbCtx', line.hasContext, () => `ctx ${line.context}%`, age);
+  setStat('#rbCost', line.hasCost, () => '$' + Number(line.cost).toFixed(2), age);
+  setMeter('#rb5h', line.hasFiveHour, line.fiveHour, age);
+  setMeter('#rbWk', line.hasWeekly, line.weekly, age);
+
+  updateRunBarNote(d, sess);
 }
 
-function setStat(sel, has, text) {
+// staleTitle says how old a held reading is, in words rather than seconds.
+function staleTitle(base, age) {
+  if (age < STALE_AFTER) return base;
+  const mins = Math.round(age / 60);
+  return `${base} — last read ${mins < 1 ? 'under a minute' : mins + (mins === 1 ? ' minute' : ' minutes')} ago`;
+}
+
+// Under this many seconds a held value is treated as current. The strip is
+// polled every second or two, so a gap of a few seconds is an ordinary scrape
+// miss rather than anything worth marking on screen.
+const STALE_AFTER = 20;
+
+function setStat(sel, has, text, age = 0) {
   const n = $(sel);
   if (!n) return;
-  // A field the status line does not print is hidden rather than shown empty or
-  // as a guessed zero.
+  // A field the status line has never printed is hidden rather than shown empty
+  // or as a guessed zero. One that was printed and is momentarily unreadable is
+  // kept, dimmed: see holdLine in internal/session/statusline.go.
   n.style.display = has ? '' : 'none';
-  if (has) n.textContent = text();
+  if (!has) return;
+  n.textContent = text();
+  n.classList.toggle('rb-stale', age >= STALE_AFTER);
+  n.title = staleTitle(sel === '#rbCtx' ? 'Context window used' : 'Cost of this session', age);
 }
 
-function setMeter(sel, has, pct) {
+function setMeter(sel, has, pct, age = 0) {
   const n = $(sel);
   if (!n) return;
   n.style.display = has ? '' : 'none';
@@ -129,6 +155,36 @@ function setMeter(sel, has, pct) {
   n.querySelector('.rb-meter-pct').textContent = v + '%';
   n.classList.toggle('warn', v >= 75 && v < 90);
   n.classList.toggle('hot', v >= 90);
+  n.classList.toggle('rb-stale', age >= STALE_AFTER);
+  n.title = staleTitle(sel === '#rb5h' ? 'Five-hour window used' : 'Weekly allowance used', age);
+}
+
+// updateRunBarNote fills the gap where the numbers would be.
+//
+// An empty strip explains nothing, and the two reasons for one want different
+// responses. Nothing scraped yet arrives on its own and says so. An account
+// with no status-line command never will, because the CLI prints no usage
+// figures without one and nothing else on disk carries them, so that one gets
+// the offer to install it.
+function updateRunBarNote(d, sess) {
+  const n = $('#rbNote');
+  if (!n) return;
+  const note = d.lineNote || '';
+  if (!note) {
+    n.style.display = 'none';
+    n.textContent = '';
+    return;
+  }
+  n.style.display = '';
+  n.textContent = '';
+  n.title = note;
+  n.append(el('span', { text: d.lineFixable ? 'no usage figures' : 'reading the status line…' }));
+  if (d.lineFixable) {
+    n.append(el('button', {
+      title: note,
+      onclick: () => offerStatusLine(sess),
+    }, 'why'));
+  }
 }
 
 // ----------------------------------------------------------------- plan
@@ -285,4 +341,69 @@ async function runSlash(sessionId, cmd, note) {
   } catch (e) {
     toast(e.message, 'bad');
   }
+}
+
+// ------------------------------------------------- the missing status line
+
+// offerStatusLine explains an empty strip and offers to make it not empty.
+//
+// The five-hour and weekly figures come out of a JSON payload the CLI hands to
+// whatever status-line command an account has configured. With none there is
+// nothing printing them, and nowhere else to look: a transcript carries token
+// counts per message and no rate limits at all.
+//
+// So the offer is to install one, and the command is this app's own binary with
+// a subcommand that reads that payload and prints a line. Nothing extra to
+// install, and it is shown before it is agreed to, because it writes to a
+// settings file that belongs to the person who signed in with it.
+async function offerStatusLine(sess) {
+  if (!sess || !sess.accountId) {
+    return toast('No account on this session to configure', 'bad');
+  }
+  let cur = {};
+  try {
+    cur = await api(`/accounts/${sess.accountId}/statusline`);
+  } catch (e) {
+    return toast(e.message, 'bad');
+  }
+
+  const body = el('div', {},
+    el('p', { style: 'margin-top:0' },
+      `Claude Code prints how much of the five-hour window and the weekly allowance you have spent only when the account has a status-line command. `,
+      el('strong', { text: sess.accountName || 'This account' }), ' has ',
+      cur.configured ? 'one that does not print them.' : 'none, so there is nothing for the strip above the composer to read.'),
+    el('p', { class: 'hint' },
+      'Those two numbers exist nowhere else. A transcript carries token counts per message and no rate limits, so without a status line there is no source at all.'),
+    cur.configured && !cur.ours
+      ? el('div', { class: 'pill warn', style: 'margin:10px 0' },
+          'This account already has its own status line. Installing this one would replace it.')
+      : null,
+    cur.configured && !cur.ours
+      ? el('pre', { class: 'tool-pre', text: cur.command })
+      : null,
+    el('label', { text: 'What would be written to settings.json' }),
+    el('pre', { class: 'tool-pre', text: cur.wouldInstall || '(this program, with the statusline subcommand)' }),
+    el('div', { class: 'hint' },
+      'Reversible from here, and it changes nothing else in that file. Agents already running keep the status line they started with, so restart one to see the figures.'));
+
+  const buttons = [['Close', 'btn', closeModal]];
+  if (cur.ours) {
+    buttons.push(['Remove it', 'btn danger', async () => {
+      closeModal();
+      try {
+        await api(`/accounts/${sess.accountId}/statusline`, { method: 'DELETE' });
+        toast('Status line removed', 'ok');
+      } catch (e) { toast(e.message, 'bad'); }
+    }]);
+  } else {
+    buttons.push([cur.configured ? 'Replace it' : 'Install it', 'btn primary', async () => {
+      closeModal();
+      try {
+        const r = await api(`/accounts/${sess.accountId}/statusline`,
+          { method: 'PUT', body: { replace: !!cur.configured } });
+        toast(r.note || 'Status line installed', 'ok');
+      } catch (e) { toast(e.message, 'bad'); }
+    }]);
+  }
+  modal('Usage figures for ' + (sess.accountName || 'this account'), body, buttons);
 }

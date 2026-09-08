@@ -57,6 +57,15 @@ type conversationResp struct {
 	// header badge does not depend on a separate list refresh landing first.
 	TotalTokens  int64   `json:"totalTokens"`
 	CacheHitRate float64 `json:"cacheHitRate"`
+
+	// LineNote says why the status strip is empty, when it is. A blank strip is
+	// not self-explaining and the two reasons want different responses: an
+	// account with no status-line command will never fill it in, while a scrape
+	// that has not caught one yet will.
+	LineNote string `json:"lineNote,omitempty"`
+	// LineFixable marks the first of those, where offering to install one is
+	// the answer rather than waiting.
+	LineFixable bool `json:"lineFixable,omitempty"`
 }
 
 func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +96,7 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 		TotalTokens:  p.TotalTokens,
 		CacheHitRate: p.CacheHitRate,
 	}
+	out.LineNote, out.LineFixable = s.statusLineNote(out.Line, p.AccountDir)
 
 	// A prompt in the terminal is checked first: it is the case where the
 	// conversation view would otherwise look frozen for no visible reason.

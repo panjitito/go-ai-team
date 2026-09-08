@@ -42,8 +42,19 @@ var ModeLabels = map[string]string{
 	ModePlan:        "plan",
 }
 
-// modeMarker finds the end of the indicator; the name sits just in front of it.
-var modeMarker = regexp.MustCompile(`(?i)\b(mode on|edits on)\b`)
+// modeMarkers end the indicator; the name sits just in front of one.
+//
+// Two literals and a substring search rather than the case-insensitive
+// alternation this used to be. Measured over a 64 KB window that pattern cost
+// 7.9 ms per call, which is a lot to spend on every poll of every open
+// conversation to find two fixed words. Dropping the word boundaries costs
+// nothing: the name still has to be found in the sixteen characters in front of
+// the marker, so "supermode on" gets looked at and then rejected.
+var modeMarkers = []string{"mode on", "edits on"}
+
+// nonLetters splits a run of text into words. Compiled once: it used to be
+// built on every call, inside a function reached from a poll.
+var nonLetters = regexp.MustCompile(`[^A-Za-z]+`)
 
 // modeNames maps the word the CLI prints to the mode it means.
 var modeNames = map[string]string{
@@ -67,21 +78,35 @@ var modeNames = map[string]string{
 // fits.
 func ParseMode(tail string) string {
 	s := flattenFrame(tail)
-	ms := modeMarker.FindAllStringIndex(s, -1)
-	for i := len(ms) - 1; i >= 0; i-- {
-		before := s[max(0, ms[i][0]-16):ms[i][0]]
-		if mode := modeFromWords(before); mode != "" {
+	lower := strings.ToLower(s)
+	end := len(lower)
+	for tries := 0; tries < maxModeCandidates && end > 0; tries++ {
+		at := -1
+		for _, marker := range modeMarkers {
+			if i := strings.LastIndex(lower[:end], marker); i > at {
+				at = i
+			}
+		}
+		if at < 0 {
+			return ""
+		}
+		if mode := modeFromWords(s[max(0, at-16):at]); mode != "" {
 			return mode
 		}
+		end = at
 	}
 	return ""
 }
+
+// maxModeCandidates bounds the walk backwards, for the reason
+// maxModelCandidates does.
+const maxModeCandidates = 12
 
 // modeFromWords tries the last word before the marker, then the last two joined,
 // and so on. One attempt covers "…/rc ⏸ plan", where only the final word is the
 // name; the other covers "m nual", where a hole split one name into two.
 func modeFromWords(before string) string {
-	words := regexp.MustCompile(`[^A-Za-z]+`).Split(strings.ToLower(before), -1)
+	words := nonLetters.Split(strings.ToLower(before), -1)
 	var kept []string
 	for _, w := range words {
 		if w != "" {

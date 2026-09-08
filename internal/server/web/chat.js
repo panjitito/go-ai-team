@@ -261,7 +261,9 @@ function leaveAgent() {
 
 function renderConversation(d, sessionId) {
   updateTermTokens(d);
-  updateRunBar(d);
+  // The session too: the run bar's explanation for an empty strip is about the
+  // account, and the conversation payload is about the conversation.
+  updateRunBar(d, sessionById(sessionId));
   const all = d.messages || [];
   CHAT.lastId = all.length ? (all[all.length - 1].id || '') : '';
   renderRail(d, sessionId);

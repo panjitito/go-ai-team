@@ -57,6 +57,14 @@ func main() {
 		}
 		return
 	}
+	// `go-ai-team statusline` is the status-line command the app can install
+	// into an account. It reads one JSON payload on stdin and prints one line,
+	// so it has to be a subcommand and it has to stay silent about failure:
+	// see statusline_cmd.go.
+	if len(os.Args) > 1 && os.Args[1] == "statusline" {
+		runStatusLine()
+		return
+	}
 
 	var (
 		port   = flag.Int("port", 0, "port to listen on (default: saved setting, else 7777)")

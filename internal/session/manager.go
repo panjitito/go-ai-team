@@ -131,6 +131,11 @@ type Session struct {
 	// it on every read stays cheap.
 	recent      []byte
 	switchAfter time.Time
+	// heldLine is the last status line that could be read, and heldAt is when.
+	// A scrape that finds nothing must not erase a reading that was right a
+	// second ago: see statusline.go.
+	heldLine StatusLine
+	heldAt   time.Time
 	// lastTokenMove is when the transcript last grew. Together with lastOut it
 	// separates "thinking" from "waiting on you".
 	lastTokenMove time.Time
